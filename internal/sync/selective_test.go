@@ -43,21 +43,21 @@ func TestTarget_SelectiveSync(t *testing.T) {
 		},
 	}
 
-	primary.EXPECT().PostAuth().Once().Return(nil)
-	replica.EXPECT().PostAuth().Once().Return(nil)
+	primary.EXPECT().PostAuth(mock.Anything).Once().Return(nil)
+	replica.EXPECT().PostAuth(mock.Anything).Once().Return(nil)
 
-	primary.EXPECT().GetTeleporter().Once().Return([]byte{}, nil)
-	replica.EXPECT().PostTeleporter(mock.Anything, mock.Anything).Once().Return(nil)
+	primary.EXPECT().GetTeleporter(mock.Anything).Once().Return([]byte{}, nil)
+	replica.EXPECT().PostTeleporter(mock.Anything, mock.Anything, mock.Anything).Once().Return(nil)
 
-	primary.EXPECT().GetConfig().Once().Return(emptyConfigResponse(), nil)
-	replica.EXPECT().PatchConfig(mock.Anything).Once().Return(nil)
+	primary.EXPECT().GetConfig(mock.Anything).Once().Return(emptyConfigResponse(), nil)
+	replica.EXPECT().PatchConfig(mock.Anything, mock.Anything).Once().Return(nil)
 
-	primary.EXPECT().PostRunGravity().Once().Return(nil)
-	replica.EXPECT().PostRunGravity().Once().Return(nil)
+	primary.EXPECT().PostRunGravity(mock.Anything).Once().Return(nil)
+	replica.EXPECT().PostRunGravity(mock.Anything).Once().Return(nil)
 
-	primary.EXPECT().DeleteSession().Once().Return(nil)
-	replica.EXPECT().DeleteSession().Once().Return(nil)
+	primary.EXPECT().DeleteSession(mock.Anything).Once().Return(nil)
+	replica.EXPECT().DeleteSession(mock.Anything).Once().Return(nil)
 
-	err := target.SelectiveSync(&settings)
+	err := target.SelectiveSync(t.Context(), &settings)
 	require.NoError(t, err)
 }

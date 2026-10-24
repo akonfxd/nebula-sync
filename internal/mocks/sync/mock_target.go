@@ -5,6 +5,8 @@
 package sync
 
 import (
+	"context"
+
 	"github.com/lovelaze/nebula-sync/internal/config"
 	mock "github.com/stretchr/testify/mock"
 )
@@ -15,10 +17,19 @@ func NewTarget(t interface {
 	mock.TestingT
 	Cleanup(func())
 }) *Target {
+	if helper, ok := t.(interface{ Helper() }); ok {
+		helper.Helper()
+	}
+
 	mock := &Target{}
 	mock.Mock.Test(t)
 
-	t.Cleanup(func() { mock.AssertExpectations(t) })
+	t.Cleanup(func() {
+		if helper, ok := t.(interface{ Helper() }); ok {
+			helper.Helper()
+		}
+		mock.AssertExpectations(t)
+	})
 
 	return mock
 }
@@ -37,16 +48,16 @@ func (_m *Target) EXPECT() *Target_Expecter {
 }
 
 // FullSync provides a mock function for the type Target
-func (_mock *Target) FullSync(sync *config.Sync) error {
-	ret := _mock.Called(sync)
+func (_mock *Target) FullSync(ctx context.Context, sync *config.Sync) error {
+	ret := _mock.Called(ctx, sync)
 
 	if len(ret) == 0 {
 		panic("no return value specified for FullSync")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(*config.Sync) error); ok {
-		r0 = returnFunc(sync)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *config.Sync) error); ok {
+		r0 = returnFunc(ctx, sync)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -59,14 +70,26 @@ type Target_FullSync_Call struct {
 }
 
 // FullSync is a helper method to define mock.On call
-//   - sync
-func (_e *Target_Expecter) FullSync(sync interface{}) *Target_FullSync_Call {
-	return &Target_FullSync_Call{Call: _e.mock.On("FullSync", sync)}
+//   - ctx context.Context
+//   - sync *config.Sync
+func (_e *Target_Expecter) FullSync(ctx any, sync any) *Target_FullSync_Call {
+	return &Target_FullSync_Call{Call: _e.mock.On("FullSync", ctx, sync)}
 }
 
-func (_c *Target_FullSync_Call) Run(run func(sync *config.Sync)) *Target_FullSync_Call {
+func (_c *Target_FullSync_Call) Run(run func(ctx context.Context, sync *config.Sync)) *Target_FullSync_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(*config.Sync))
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 *config.Sync
+		if args[1] != nil {
+			arg1 = args[1].(*config.Sync)
+		}
+		run(
+			arg0,
+			arg1,
+		)
 	})
 	return _c
 }
@@ -76,22 +99,22 @@ func (_c *Target_FullSync_Call) Return(err error) *Target_FullSync_Call {
 	return _c
 }
 
-func (_c *Target_FullSync_Call) RunAndReturn(run func(sync *config.Sync) error) *Target_FullSync_Call {
+func (_c *Target_FullSync_Call) RunAndReturn(run func(ctx context.Context, sync *config.Sync) error) *Target_FullSync_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // SelectiveSync provides a mock function for the type Target
-func (_mock *Target) SelectiveSync(sync *config.Sync) error {
-	ret := _mock.Called(sync)
+func (_mock *Target) SelectiveSync(ctx context.Context, sync *config.Sync) error {
+	ret := _mock.Called(ctx, sync)
 
 	if len(ret) == 0 {
 		panic("no return value specified for SelectiveSync")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(*config.Sync) error); ok {
-		r0 = returnFunc(sync)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *config.Sync) error); ok {
+		r0 = returnFunc(ctx, sync)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -104,14 +127,26 @@ type Target_SelectiveSync_Call struct {
 }
 
 // SelectiveSync is a helper method to define mock.On call
-//   - sync
-func (_e *Target_Expecter) SelectiveSync(sync interface{}) *Target_SelectiveSync_Call {
-	return &Target_SelectiveSync_Call{Call: _e.mock.On("SelectiveSync", sync)}
+//   - ctx context.Context
+//   - sync *config.Sync
+func (_e *Target_Expecter) SelectiveSync(ctx any, sync any) *Target_SelectiveSync_Call {
+	return &Target_SelectiveSync_Call{Call: _e.mock.On("SelectiveSync", ctx, sync)}
 }
 
-func (_c *Target_SelectiveSync_Call) Run(run func(sync *config.Sync)) *Target_SelectiveSync_Call {
+func (_c *Target_SelectiveSync_Call) Run(run func(ctx context.Context, sync *config.Sync)) *Target_SelectiveSync_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(*config.Sync))
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 *config.Sync
+		if args[1] != nil {
+			arg1 = args[1].(*config.Sync)
+		}
+		run(
+			arg0,
+			arg1,
+		)
 	})
 	return _c
 }
@@ -121,7 +156,7 @@ func (_c *Target_SelectiveSync_Call) Return(err error) *Target_SelectiveSync_Cal
 	return _c
 }
 
-func (_c *Target_SelectiveSync_Call) RunAndReturn(run func(sync *config.Sync) error) *Target_SelectiveSync_Call {
+func (_c *Target_SelectiveSync_Call) RunAndReturn(run func(ctx context.Context, sync *config.Sync) error) *Target_SelectiveSync_Call {
 	_c.Call.Return(run)
 	return _c
 }

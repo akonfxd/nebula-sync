@@ -6,8 +6,8 @@ import (
 	"net/http"
 )
 
-func Check(url string) error {
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+func Check(ctx context.Context, url string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("health check failed: %w", err)
 	}

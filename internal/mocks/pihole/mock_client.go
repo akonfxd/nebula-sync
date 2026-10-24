@@ -5,6 +5,8 @@
 package pihole
 
 import (
+	"context"
+
 	"github.com/lovelaze/nebula-sync/internal/pihole/model"
 	mock "github.com/stretchr/testify/mock"
 )
@@ -15,10 +17,19 @@ func NewClient(t interface {
 	mock.TestingT
 	Cleanup(func())
 }) *Client {
+	if helper, ok := t.(interface{ Helper() }); ok {
+		helper.Helper()
+	}
+
 	mock := &Client{}
 	mock.Mock.Test(t)
 
-	t.Cleanup(func() { mock.AssertExpectations(t) })
+	t.Cleanup(func() {
+		if helper, ok := t.(interface{ Helper() }); ok {
+			helper.Helper()
+		}
+		mock.AssertExpectations(t)
+	})
 
 	return mock
 }
@@ -59,14 +70,20 @@ type Client_APIPath_Call struct {
 }
 
 // APIPath is a helper method to define mock.On call
-//   - target
-func (_e *Client_Expecter) APIPath(target interface{}) *Client_APIPath_Call {
+//   - target string
+func (_e *Client_Expecter) APIPath(target any) *Client_APIPath_Call {
 	return &Client_APIPath_Call{Call: _e.mock.On("APIPath", target)}
 }
 
 func (_c *Client_APIPath_Call) Run(run func(target string)) *Client_APIPath_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
 	})
 	return _c
 }
@@ -82,16 +99,16 @@ func (_c *Client_APIPath_Call) RunAndReturn(run func(target string) string) *Cli
 }
 
 // DeleteSession provides a mock function for the type Client
-func (_mock *Client) DeleteSession() error {
-	ret := _mock.Called()
+func (_mock *Client) DeleteSession(ctx context.Context) error {
+	ret := _mock.Called(ctx)
 
 	if len(ret) == 0 {
 		panic("no return value specified for DeleteSession")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func() error); ok {
-		r0 = returnFunc()
+	if returnFunc, ok := ret.Get(0).(func(context.Context) error); ok {
+		r0 = returnFunc(ctx)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -104,13 +121,20 @@ type Client_DeleteSession_Call struct {
 }
 
 // DeleteSession is a helper method to define mock.On call
-func (_e *Client_Expecter) DeleteSession() *Client_DeleteSession_Call {
-	return &Client_DeleteSession_Call{Call: _e.mock.On("DeleteSession")}
+//   - ctx context.Context
+func (_e *Client_Expecter) DeleteSession(ctx any) *Client_DeleteSession_Call {
+	return &Client_DeleteSession_Call{Call: _e.mock.On("DeleteSession", ctx)}
 }
 
-func (_c *Client_DeleteSession_Call) Run(run func()) *Client_DeleteSession_Call {
+func (_c *Client_DeleteSession_Call) Run(run func(ctx context.Context)) *Client_DeleteSession_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run()
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
 	})
 	return _c
 }
@@ -120,14 +144,14 @@ func (_c *Client_DeleteSession_Call) Return(err error) *Client_DeleteSession_Cal
 	return _c
 }
 
-func (_c *Client_DeleteSession_Call) RunAndReturn(run func() error) *Client_DeleteSession_Call {
+func (_c *Client_DeleteSession_Call) RunAndReturn(run func(ctx context.Context) error) *Client_DeleteSession_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // GetConfig provides a mock function for the type Client
-func (_mock *Client) GetConfig() (*model.ConfigResponse, error) {
-	ret := _mock.Called()
+func (_mock *Client) GetConfig(ctx context.Context) (*model.ConfigResponse, error) {
+	ret := _mock.Called(ctx)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetConfig")
@@ -135,18 +159,18 @@ func (_mock *Client) GetConfig() (*model.ConfigResponse, error) {
 
 	var r0 *model.ConfigResponse
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func() (*model.ConfigResponse, error)); ok {
-		return returnFunc()
+	if returnFunc, ok := ret.Get(0).(func(context.Context) (*model.ConfigResponse, error)); ok {
+		return returnFunc(ctx)
 	}
-	if returnFunc, ok := ret.Get(0).(func() *model.ConfigResponse); ok {
-		r0 = returnFunc()
+	if returnFunc, ok := ret.Get(0).(func(context.Context) *model.ConfigResponse); ok {
+		r0 = returnFunc(ctx)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*model.ConfigResponse)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func() error); ok {
-		r1 = returnFunc()
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -159,13 +183,20 @@ type Client_GetConfig_Call struct {
 }
 
 // GetConfig is a helper method to define mock.On call
-func (_e *Client_Expecter) GetConfig() *Client_GetConfig_Call {
-	return &Client_GetConfig_Call{Call: _e.mock.On("GetConfig")}
+//   - ctx context.Context
+func (_e *Client_Expecter) GetConfig(ctx any) *Client_GetConfig_Call {
+	return &Client_GetConfig_Call{Call: _e.mock.On("GetConfig", ctx)}
 }
 
-func (_c *Client_GetConfig_Call) Run(run func()) *Client_GetConfig_Call {
+func (_c *Client_GetConfig_Call) Run(run func(ctx context.Context)) *Client_GetConfig_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run()
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
 	})
 	return _c
 }
@@ -175,14 +206,14 @@ func (_c *Client_GetConfig_Call) Return(configResponse *model.ConfigResponse, er
 	return _c
 }
 
-func (_c *Client_GetConfig_Call) RunAndReturn(run func() (*model.ConfigResponse, error)) *Client_GetConfig_Call {
+func (_c *Client_GetConfig_Call) RunAndReturn(run func(ctx context.Context) (*model.ConfigResponse, error)) *Client_GetConfig_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // GetTeleporter provides a mock function for the type Client
-func (_mock *Client) GetTeleporter() ([]byte, error) {
-	ret := _mock.Called()
+func (_mock *Client) GetTeleporter(ctx context.Context) ([]byte, error) {
+	ret := _mock.Called(ctx)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetTeleporter")
@@ -190,18 +221,18 @@ func (_mock *Client) GetTeleporter() ([]byte, error) {
 
 	var r0 []byte
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func() ([]byte, error)); ok {
-		return returnFunc()
+	if returnFunc, ok := ret.Get(0).(func(context.Context) ([]byte, error)); ok {
+		return returnFunc(ctx)
 	}
-	if returnFunc, ok := ret.Get(0).(func() []byte); ok {
-		r0 = returnFunc()
+	if returnFunc, ok := ret.Get(0).(func(context.Context) []byte); ok {
+		r0 = returnFunc(ctx)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]byte)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func() error); ok {
-		r1 = returnFunc()
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -214,13 +245,20 @@ type Client_GetTeleporter_Call struct {
 }
 
 // GetTeleporter is a helper method to define mock.On call
-func (_e *Client_Expecter) GetTeleporter() *Client_GetTeleporter_Call {
-	return &Client_GetTeleporter_Call{Call: _e.mock.On("GetTeleporter")}
+//   - ctx context.Context
+func (_e *Client_Expecter) GetTeleporter(ctx any) *Client_GetTeleporter_Call {
+	return &Client_GetTeleporter_Call{Call: _e.mock.On("GetTeleporter", ctx)}
 }
 
-func (_c *Client_GetTeleporter_Call) Run(run func()) *Client_GetTeleporter_Call {
+func (_c *Client_GetTeleporter_Call) Run(run func(ctx context.Context)) *Client_GetTeleporter_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run()
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
 	})
 	return _c
 }
@@ -230,22 +268,22 @@ func (_c *Client_GetTeleporter_Call) Return(bytes []byte, err error) *Client_Get
 	return _c
 }
 
-func (_c *Client_GetTeleporter_Call) RunAndReturn(run func() ([]byte, error)) *Client_GetTeleporter_Call {
+func (_c *Client_GetTeleporter_Call) RunAndReturn(run func(ctx context.Context) ([]byte, error)) *Client_GetTeleporter_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // PatchConfig provides a mock function for the type Client
-func (_mock *Client) PatchConfig(patchRequest *model.PatchConfigRequest) error {
-	ret := _mock.Called(patchRequest)
+func (_mock *Client) PatchConfig(ctx context.Context, patchRequest *model.PatchConfigRequest) error {
+	ret := _mock.Called(ctx, patchRequest)
 
 	if len(ret) == 0 {
 		panic("no return value specified for PatchConfig")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(*model.PatchConfigRequest) error); ok {
-		r0 = returnFunc(patchRequest)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *model.PatchConfigRequest) error); ok {
+		r0 = returnFunc(ctx, patchRequest)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -258,14 +296,26 @@ type Client_PatchConfig_Call struct {
 }
 
 // PatchConfig is a helper method to define mock.On call
-//   - patchRequest
-func (_e *Client_Expecter) PatchConfig(patchRequest interface{}) *Client_PatchConfig_Call {
-	return &Client_PatchConfig_Call{Call: _e.mock.On("PatchConfig", patchRequest)}
+//   - ctx context.Context
+//   - patchRequest *model.PatchConfigRequest
+func (_e *Client_Expecter) PatchConfig(ctx any, patchRequest any) *Client_PatchConfig_Call {
+	return &Client_PatchConfig_Call{Call: _e.mock.On("PatchConfig", ctx, patchRequest)}
 }
 
-func (_c *Client_PatchConfig_Call) Run(run func(patchRequest *model.PatchConfigRequest)) *Client_PatchConfig_Call {
+func (_c *Client_PatchConfig_Call) Run(run func(ctx context.Context, patchRequest *model.PatchConfigRequest)) *Client_PatchConfig_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(*model.PatchConfigRequest))
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 *model.PatchConfigRequest
+		if args[1] != nil {
+			arg1 = args[1].(*model.PatchConfigRequest)
+		}
+		run(
+			arg0,
+			arg1,
+		)
 	})
 	return _c
 }
@@ -275,22 +325,22 @@ func (_c *Client_PatchConfig_Call) Return(err error) *Client_PatchConfig_Call {
 	return _c
 }
 
-func (_c *Client_PatchConfig_Call) RunAndReturn(run func(patchRequest *model.PatchConfigRequest) error) *Client_PatchConfig_Call {
+func (_c *Client_PatchConfig_Call) RunAndReturn(run func(ctx context.Context, patchRequest *model.PatchConfigRequest) error) *Client_PatchConfig_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // PostAuth provides a mock function for the type Client
-func (_mock *Client) PostAuth() error {
-	ret := _mock.Called()
+func (_mock *Client) PostAuth(ctx context.Context) error {
+	ret := _mock.Called(ctx)
 
 	if len(ret) == 0 {
 		panic("no return value specified for PostAuth")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func() error); ok {
-		r0 = returnFunc()
+	if returnFunc, ok := ret.Get(0).(func(context.Context) error); ok {
+		r0 = returnFunc(ctx)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -303,13 +353,20 @@ type Client_PostAuth_Call struct {
 }
 
 // PostAuth is a helper method to define mock.On call
-func (_e *Client_Expecter) PostAuth() *Client_PostAuth_Call {
-	return &Client_PostAuth_Call{Call: _e.mock.On("PostAuth")}
+//   - ctx context.Context
+func (_e *Client_Expecter) PostAuth(ctx any) *Client_PostAuth_Call {
+	return &Client_PostAuth_Call{Call: _e.mock.On("PostAuth", ctx)}
 }
 
-func (_c *Client_PostAuth_Call) Run(run func()) *Client_PostAuth_Call {
+func (_c *Client_PostAuth_Call) Run(run func(ctx context.Context)) *Client_PostAuth_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run()
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
 	})
 	return _c
 }
@@ -319,22 +376,22 @@ func (_c *Client_PostAuth_Call) Return(err error) *Client_PostAuth_Call {
 	return _c
 }
 
-func (_c *Client_PostAuth_Call) RunAndReturn(run func() error) *Client_PostAuth_Call {
+func (_c *Client_PostAuth_Call) RunAndReturn(run func(ctx context.Context) error) *Client_PostAuth_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // PostRunGravity provides a mock function for the type Client
-func (_mock *Client) PostRunGravity() error {
-	ret := _mock.Called()
+func (_mock *Client) PostRunGravity(ctx context.Context) error {
+	ret := _mock.Called(ctx)
 
 	if len(ret) == 0 {
 		panic("no return value specified for PostRunGravity")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func() error); ok {
-		r0 = returnFunc()
+	if returnFunc, ok := ret.Get(0).(func(context.Context) error); ok {
+		r0 = returnFunc(ctx)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -347,13 +404,20 @@ type Client_PostRunGravity_Call struct {
 }
 
 // PostRunGravity is a helper method to define mock.On call
-func (_e *Client_Expecter) PostRunGravity() *Client_PostRunGravity_Call {
-	return &Client_PostRunGravity_Call{Call: _e.mock.On("PostRunGravity")}
+//   - ctx context.Context
+func (_e *Client_Expecter) PostRunGravity(ctx any) *Client_PostRunGravity_Call {
+	return &Client_PostRunGravity_Call{Call: _e.mock.On("PostRunGravity", ctx)}
 }
 
-func (_c *Client_PostRunGravity_Call) Run(run func()) *Client_PostRunGravity_Call {
+func (_c *Client_PostRunGravity_Call) Run(run func(ctx context.Context)) *Client_PostRunGravity_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run()
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
 	})
 	return _c
 }
@@ -363,22 +427,22 @@ func (_c *Client_PostRunGravity_Call) Return(err error) *Client_PostRunGravity_C
 	return _c
 }
 
-func (_c *Client_PostRunGravity_Call) RunAndReturn(run func() error) *Client_PostRunGravity_Call {
+func (_c *Client_PostRunGravity_Call) RunAndReturn(run func(ctx context.Context) error) *Client_PostRunGravity_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // PostTeleporter provides a mock function for the type Client
-func (_mock *Client) PostTeleporter(payload []byte, teleporterRequest *model.PostTeleporterRequest) error {
-	ret := _mock.Called(payload, teleporterRequest)
+func (_mock *Client) PostTeleporter(ctx context.Context, payload []byte, teleporterRequest *model.PostTeleporterRequest) error {
+	ret := _mock.Called(ctx, payload, teleporterRequest)
 
 	if len(ret) == 0 {
 		panic("no return value specified for PostTeleporter")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func([]byte, *model.PostTeleporterRequest) error); ok {
-		r0 = returnFunc(payload, teleporterRequest)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, []byte, *model.PostTeleporterRequest) error); ok {
+		r0 = returnFunc(ctx, payload, teleporterRequest)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -391,15 +455,32 @@ type Client_PostTeleporter_Call struct {
 }
 
 // PostTeleporter is a helper method to define mock.On call
-//   - payload
-//   - teleporterRequest
-func (_e *Client_Expecter) PostTeleporter(payload interface{}, teleporterRequest interface{}) *Client_PostTeleporter_Call {
-	return &Client_PostTeleporter_Call{Call: _e.mock.On("PostTeleporter", payload, teleporterRequest)}
+//   - ctx context.Context
+//   - payload []byte
+//   - teleporterRequest *model.PostTeleporterRequest
+func (_e *Client_Expecter) PostTeleporter(ctx any, payload any, teleporterRequest any) *Client_PostTeleporter_Call {
+	return &Client_PostTeleporter_Call{Call: _e.mock.On("PostTeleporter", ctx, payload, teleporterRequest)}
 }
 
-func (_c *Client_PostTeleporter_Call) Run(run func(payload []byte, teleporterRequest *model.PostTeleporterRequest)) *Client_PostTeleporter_Call {
+func (_c *Client_PostTeleporter_Call) Run(run func(ctx context.Context, payload []byte, teleporterRequest *model.PostTeleporterRequest)) *Client_PostTeleporter_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].([]byte), args[1].(*model.PostTeleporterRequest))
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 []byte
+		if args[1] != nil {
+			arg1 = args[1].([]byte)
+		}
+		var arg2 *model.PostTeleporterRequest
+		if args[2] != nil {
+			arg2 = args[2].(*model.PostTeleporterRequest)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
 	})
 	return _c
 }
@@ -409,7 +490,7 @@ func (_c *Client_PostTeleporter_Call) Return(err error) *Client_PostTeleporter_C
 	return _c
 }
 
-func (_c *Client_PostTeleporter_Call) RunAndReturn(run func(payload []byte, teleporterRequest *model.PostTeleporterRequest) error) *Client_PostTeleporter_Call {
+func (_c *Client_PostTeleporter_Call) RunAndReturn(run func(ctx context.Context, payload []byte, teleporterRequest *model.PostTeleporterRequest) error) *Client_PostTeleporter_Call {
 	_c.Call.Return(run)
 	return _c
 }

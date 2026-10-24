@@ -21,7 +21,7 @@ var runCmd = &cobra.Command{
 			log.Fatal().Err(err).Msg("Failed to initialize service")
 		}
 
-		if err = service.Run(); err != nil {
+		if err = service.Run(cmd.Context()); err != nil {
 			log.Fatal().Err(err).Msg("Sync failed")
 		}
 	},

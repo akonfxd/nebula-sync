@@ -9,6 +9,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+//nolint:recvcheck // String must stay on the value receiver.
 type PiHole struct {
 	URL      *url.URL
 	Password string

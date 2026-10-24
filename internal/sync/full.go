@@ -1,31 +1,32 @@
 package sync
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/lovelaze/nebula-sync/internal/config"
 )
 
-func (target *target) FullSync(conf *config.Sync) error {
-	return target.sync(func() error {
-		return target.full(conf)
+func (target *target) FullSync(ctx context.Context, conf *config.Sync) error {
+	return target.sync(ctx, func() error {
+		return target.full(ctx, conf)
 	}, "full")
 }
 
-func (target *target) full(conf *config.Sync) error {
+func (target *target) full(ctx context.Context, conf *config.Sync) error {
 	gravitySettings := newFullSyncGravitySettings()
 	configSettings := newFullSyncConfigSettings()
 
-	if err := target.syncTeleporters(gravitySettings); err != nil {
+	if err := target.syncTeleporters(ctx, gravitySettings); err != nil {
 		return fmt.Errorf("sync teleporters: %w", err)
 	}
 
-	if err := target.syncConfigs(configSettings); err != nil {
+	if err := target.syncConfigs(ctx, configSettings); err != nil {
 		return fmt.Errorf("sync configs: %w", err)
 	}
 
 	if conf.RunGravity {
-		if err := target.runGravity(); err != nil {
+		if err := target.runGravity(ctx); err != nil {
 			return fmt.Errorf("run gravity: %w", err)
 		}
 	}

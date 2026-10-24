@@ -1,7 +1,9 @@
 package retry
 
 import (
+	"context"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/avast/retry-go"
@@ -18,19 +20,20 @@ const (
 	AttemptsDeleteSession  = 3
 )
 
-var delay time.Duration
+var delay atomic.Int64
 
 func Init(clientConfig *config.Client) {
-	delay = time.Duration(clientConfig.RetryDelay) * time.Second
+	delay.Store(clientConfig.RetryDelay * int64(time.Second))
 }
 
-func Fixed(retryFunc func() error, attempts uint) error {
+func Fixed(ctx context.Context, retryFunc func() error, attempts uint) error {
 	return retry.Do(
 		func() error {
 			return retryFunc()
 		},
+		retry.Context(ctx),
 		retry.Attempts(attempts),
-		retry.Delay(delay),
+		retry.Delay(time.Duration(delay.Load())),
 		retry.LastErrorOnly(true),
 		retry.DelayType(retry.FixedDelay),
 		retry.OnRetry(func(n uint, err error) {

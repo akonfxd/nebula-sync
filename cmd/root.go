@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"context"
+
 	"github.com/spf13/cobra"
 
 	"github.com/lovelaze/nebula-sync/internal/log"
@@ -12,8 +14,8 @@ var rootCmd = &cobra.Command{
 	Version: version.Version,
 }
 
-func Execute() error {
-	return rootCmd.Execute()
+func Execute(ctx context.Context) error {
+	return rootCmd.ExecuteContext(ctx)
 }
 
 func init() {

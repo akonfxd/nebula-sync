@@ -19,7 +19,7 @@ func TestHealthHandler_healthy(t *testing.T) {
 	require.Len(t, state.Outcomes(), 1)
 	require.True(t, state.Outcomes()[0].Success)
 
-	server := NewServer(state)
+	server := NewServer(state, ":0")
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	resp := httptest.NewRecorder()
@@ -39,7 +39,7 @@ func TestHealthHandler_unhealthy(t *testing.T) {
 	require.Len(t, state.Outcomes(), 1)
 	require.False(t, state.Outcomes()[0].Success)
 
-	server := NewServer(state)
+	server := NewServer(state, ":0")
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	resp := httptest.NewRecorder()

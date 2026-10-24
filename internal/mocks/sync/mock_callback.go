@@ -14,10 +14,19 @@ func NewCallback(t interface {
 	mock.TestingT
 	Cleanup(func())
 }) *Callback {
+	if helper, ok := t.(interface{ Helper() }); ok {
+		helper.Helper()
+	}
+
 	mock := &Callback{}
 	mock.Mock.Test(t)
 
-	t.Cleanup(func() { mock.AssertExpectations(t) })
+	t.Cleanup(func() {
+		if helper, ok := t.(interface{ Helper() }); ok {
+			helper.Helper()
+		}
+		mock.AssertExpectations(t)
+	})
 
 	return mock
 }
@@ -47,14 +56,20 @@ type Callback_OnFailure_Call struct {
 }
 
 // OnFailure is a helper method to define mock.On call
-//   - err
-func (_e *Callback_Expecter) OnFailure(err interface{}) *Callback_OnFailure_Call {
+//   - err error
+func (_e *Callback_Expecter) OnFailure(err any) *Callback_OnFailure_Call {
 	return &Callback_OnFailure_Call{Call: _e.mock.On("OnFailure", err)}
 }
 
 func (_c *Callback_OnFailure_Call) Run(run func(err error)) *Callback_OnFailure_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(error))
+		var arg0 error
+		if args[0] != nil {
+			arg0 = args[0].(error)
+		}
+		run(
+			arg0,
+		)
 	})
 	return _c
 }

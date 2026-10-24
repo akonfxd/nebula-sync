@@ -23,7 +23,7 @@ func TestWithRetry_DelayBetweenRetries(t *testing.T) {
 
 	counter := 0
 	start := time.Now()
-	err := Fixed(func() error {
+	err := Fixed(t.Context(), func() error {
 		counter++
 		if counter < 3 {
 			return errors.New("test error")
@@ -47,7 +47,7 @@ func TestWithRetry_NoRetriesOnImmediateSuccess(t *testing.T) {
 	})
 
 	counter := 0
-	err := Fixed(func() error {
+	err := Fixed(t.Context(), func() error {
 		counter++
 		return nil
 	}, 5) // 5 attempts, 2-second delay
@@ -65,7 +65,7 @@ func TestWithRetry_SuccessAfterRetries(t *testing.T) {
 	})
 
 	counter := 0
-	err := Fixed(func() error {
+	err := Fixed(t.Context(), func() error {
 		counter++
 		if counter < 2 {
 			return errors.New("test error")
@@ -86,7 +86,7 @@ func TestWithRetry_MaxAttemptsFailure(t *testing.T) {
 	})
 
 	counter := 0
-	err := Fixed(func() error {
+	err := Fixed(t.Context(), func() error {
 		counter++
 		return errors.New("test error")
 	}, 3) // 3 attempts, 1-second delay

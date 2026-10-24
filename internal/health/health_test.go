@@ -14,7 +14,7 @@ func TestHealth_CheckSuccess(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	err := Check(ts.URL)
+	err := Check(t.Context(), ts.URL)
 	require.NoError(t, err)
 }
 
@@ -24,6 +24,6 @@ func TestHealth_CheckFailure(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	err := Check(ts.URL)
+	err := Check(t.Context(), ts.URL)
 	require.Error(t, err)
 }

@@ -20,13 +20,13 @@ import (
 var userAgent = fmt.Sprintf("nebula-sync/%s", version.Version)
 
 type Client interface {
-	PostAuth() error
-	DeleteSession() error
-	GetTeleporter() ([]byte, error)
-	PostTeleporter(payload []byte, teleporterRequest *model.PostTeleporterRequest) error
-	GetConfig() (configResponse *model.ConfigResponse, err error)
-	PatchConfig(patchRequest *model.PatchConfigRequest) error
-	PostRunGravity() error
+	PostAuth(ctx context.Context) error
+	DeleteSession(ctx context.Context) error
+	GetTeleporter(ctx context.Context) ([]byte, error)
+	PostTeleporter(ctx context.Context, payload []byte, teleporterRequest *model.PostTeleporterRequest) error
+	GetConfig(ctx context.Context) (configResponse *model.ConfigResponse, err error)
+	PatchConfig(ctx context.Context, patchRequest *model.PatchConfigRequest) error
+	PostRunGravity(ctx context.Context) error
 	String() string
 	APIPath(target string) string
 }
@@ -62,7 +62,7 @@ func (a *auth) verify() error {
 	return nil
 }
 
-func (client *client) PostAuth() error {
+func (client *client) PostAuth(ctx context.Context) error {
 	client.logger.Debug().Msg("PostAuth")
 	authResponse := model.AuthResponse{}
 
@@ -72,7 +72,7 @@ func (client *client) PostAuth() error {
 	}
 
 	req, err := http.NewRequestWithContext(
-		context.Background(),
+		ctx,
 		http.MethodPost,
 		client.APIPath("/auth"),
 		bytes.NewReader(reqBytes),
@@ -113,7 +113,7 @@ func (client *client) PostAuth() error {
 	return client.auth.verify()
 }
 
-func (client *client) DeleteSession() error {
+func (client *client) DeleteSession(ctx context.Context) error {
 	client.logger.Debug().Msg("Delete session")
 	if err := client.auth.verify(); err != nil {
 		return client.wrapError(err, nil)
@@ -124,7 +124,7 @@ func (client *client) DeleteSession() error {
 		return nil
 	}
 
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodDelete, client.APIPath("auth"), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, client.APIPath("auth"), nil)
 	if err != nil {
 		return client.wrapError(err, req)
 	}
@@ -145,12 +145,12 @@ func (client *client) DeleteSession() error {
 	return client.wrapError(err, req)
 }
 
-func (client *client) GetTeleporter() ([]byte, error) {
+func (client *client) GetTeleporter(ctx context.Context) ([]byte, error) {
 	client.logger.Debug().Msg("Get teleporter")
 	if err := client.auth.verify(); err != nil {
 		return nil, client.wrapError(err, nil)
 	}
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, client.APIPath("teleporter"), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, client.APIPath("teleporter"), nil)
 	if err != nil {
 		return nil, client.wrapError(err, req)
 	}
@@ -171,7 +171,11 @@ func (client *client) GetTeleporter() ([]byte, error) {
 	return body, client.wrapError(err, req)
 }
 
-func (client *client) PostTeleporter(payload []byte, teleporterRequest *model.PostTeleporterRequest) error {
+func (client *client) PostTeleporter(
+	ctx context.Context,
+	payload []byte,
+	teleporterRequest *model.PostTeleporterRequest,
+) error {
 	client.logger.Debug().Any("payload", teleporterRequest).Msg("Post teleporter")
 
 	if err := client.auth.verify(); err != nil {
@@ -200,7 +204,7 @@ func (client *client) PostTeleporter(payload []byte, teleporterRequest *model.Po
 		return client.wrapError(err, nil)
 	}
 
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, client.APIPath("teleporter"), &requestBody)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, client.APIPath("teleporter"), &requestBody)
 	if err != nil {
 		return client.wrapError(err, req)
 	}
@@ -221,14 +225,14 @@ func (client *client) PostTeleporter(payload []byte, teleporterRequest *model.Po
 	return nil
 }
 
-func (client *client) GetConfig() (*model.ConfigResponse, error) {
+func (client *client) GetConfig(ctx context.Context) (*model.ConfigResponse, error) {
 	var configResponse model.ConfigResponse
 	client.logger.Debug().Msg("Get config")
 	if err := client.auth.verify(); err != nil {
 		return &configResponse, client.wrapError(err, nil)
 	}
 
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, client.APIPath("config"), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, client.APIPath("config"), nil)
 	if err != nil {
 		return &configResponse, client.wrapError(err, req)
 	}
@@ -257,7 +261,7 @@ func (client *client) GetConfig() (*model.ConfigResponse, error) {
 	return &configResponse, client.wrapError(err, req)
 }
 
-func (client *client) PatchConfig(patchRequest *model.PatchConfigRequest) error {
+func (client *client) PatchConfig(ctx context.Context, patchRequest *model.PatchConfigRequest) error {
 	client.logger.Debug().Any("payload", patchRequest).Msgf("Patch config")
 	if err := client.auth.verify(); err != nil {
 		return client.wrapError(err, nil)
@@ -269,7 +273,7 @@ func (client *client) PatchConfig(patchRequest *model.PatchConfigRequest) error 
 	}
 
 	req, err := http.NewRequestWithContext(
-		context.Background(),
+		ctx,
 		http.MethodPatch,
 		client.APIPath("config"),
 		bytes.NewReader(reqBytes),
@@ -293,13 +297,13 @@ func (client *client) PatchConfig(patchRequest *model.PatchConfigRequest) error 
 	return client.wrapError(err, req)
 }
 
-func (client *client) PostRunGravity() error {
+func (client *client) PostRunGravity(ctx context.Context) error {
 	client.logger.Debug().Msg("Post run gravity")
 	if err := client.auth.verify(); err != nil {
 		return client.wrapError(err, nil)
 	}
 
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, client.APIPath("action/gravity"), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, client.APIPath("action/gravity"), nil)
 	if err != nil {
 		return client.wrapError(err, req)
 	}

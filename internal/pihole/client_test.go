@@ -31,7 +31,7 @@ type clientTestSuite struct {
 
 func (suite *clientTestSuite) SetupTest() {
 	client := createClient(piHole)
-	err := client.PostAuth()
+	err := client.PostAuth(suite.T().Context())
 	suite.Require().NoError(err)
 	suite.client = client
 }
@@ -41,27 +41,27 @@ func TestClientIntegration(t *testing.T) {
 }
 
 func (suite *clientTestSuite) TestClient_Authenticate() {
-	err := suite.client.PostAuth()
+	err := suite.client.PostAuth(suite.T().Context())
 
 	suite.Require().NoError(err)
 }
 
 func (suite *clientTestSuite) TestClient_DeleteSession() {
-	err := suite.client.DeleteSession()
+	err := suite.client.DeleteSession(suite.T().Context())
 
 	suite.Require().NoError(err)
 }
 
 func (suite *clientTestSuite) TestClient_GetTeleporter() {
-	payload, err := suite.client.GetTeleporter()
+	payload, err := suite.client.GetTeleporter(suite.T().Context())
 
 	suite.Require().NoError(err)
 	suite.NotNil(suite.T(), payload)
 }
 
 func (suite *clientTestSuite) TestClient_PostTeleporter() {
-	payload, _ := suite.client.GetTeleporter()
-	err := suite.client.PostTeleporter(payload, &model.PostTeleporterRequest{
+	payload, _ := suite.client.GetTeleporter(suite.T().Context())
+	err := suite.client.PostTeleporter(suite.T().Context(), payload, &model.PostTeleporterRequest{
 		Config:     true,
 		DHCPLeases: true,
 		Gravity: model.PostGravityRequest{
@@ -79,7 +79,7 @@ func (suite *clientTestSuite) TestClient_PostTeleporter() {
 }
 
 func (suite *clientTestSuite) TestClient_GetConfig() {
-	conf, err := suite.client.GetConfig()
+	conf, err := suite.client.GetConfig(suite.T().Context())
 
 	suite.Require().NoError(err)
 	suite.NotNil(suite.T(), conf)
@@ -97,13 +97,13 @@ func (suite *clientTestSuite) TestClient_PatchConfig() {
 			Debug:    nil,
 		},
 	}
-	err := suite.client.PatchConfig(&request)
+	err := suite.client.PatchConfig(suite.T().Context(), &request)
 
 	suite.Require().NoError(err)
 }
 
 func (suite *clientTestSuite) TestClient_PostRunGravity() {
-	err := suite.client.PostRunGravity()
+	err := suite.client.PostRunGravity(suite.T().Context())
 
 	suite.Require().NoError(err)
 }

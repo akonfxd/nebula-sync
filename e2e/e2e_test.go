@@ -31,7 +31,7 @@ func (suite *testSuite) Test_FullSync() {
 
 	s, err := service.Init()
 	suite.Require().NoError(err)
-	err = s.Run()
+	err = s.Run(suite.T().Context())
 	suite.Require().NoError(err)
 }
 
@@ -43,7 +43,7 @@ func (suite *testSuite) Test_FullSync_SSL() {
 
 	s, err := service.Init()
 	suite.Require().NoError(err)
-	err = s.Run()
+	err = s.Run(suite.T().Context())
 	suite.Require().NoError(err)
 }
 
@@ -57,7 +57,7 @@ func (suite *testSuite) Test_SelectiveSync() {
 
 	s, err := service.Init()
 	suite.Require().NoError(err)
-	err = s.Run()
+	err = s.Run(suite.T().Context())
 	suite.Require().NoError(err)
 }
 
@@ -78,7 +78,7 @@ func (suite *testSuite) Test_SelectiveSync_Include() {
 
 	s, err := service.Init()
 	suite.Require().NoError(err)
-	err = s.Run()
+	err = s.Run(suite.T().Context())
 	suite.Require().NoError(err)
 }
 
@@ -99,7 +99,7 @@ func (suite *testSuite) Test_SelectiveSync_Exclude() {
 
 	s, err := service.Init()
 	suite.Require().NoError(err)
-	err = s.Run()
+	err = s.Run(suite.T().Context())
 	suite.Require().NoError(err)
 }
 

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 
 	"github.com/lovelaze/nebula-sync/internal/config"
 	piholemock "github.com/lovelaze/nebula-sync/internal/mocks/pihole"
@@ -26,10 +27,10 @@ func Test_target_authenticate(t *testing.T) {
 		Client:   mockClient,
 	}
 
-	primary.EXPECT().PostAuth().Once().Return(nil)
-	replica.EXPECT().PostAuth().Once().Return(nil)
+	primary.EXPECT().PostAuth(mock.Anything).Once().Return(nil)
+	replica.EXPECT().PostAuth(mock.Anything).Once().Return(nil)
 
-	err := target.authenticate()
+	err := target.authenticate(t.Context())
 	assert.NoError(t, err)
 }
 
@@ -48,10 +49,10 @@ func Test_target_deleteSessions(t *testing.T) {
 		Client:   mockClient,
 	}
 
-	primary.EXPECT().DeleteSession().Once().Return(nil)
-	replica.EXPECT().DeleteSession().Once().Return(nil)
+	primary.EXPECT().DeleteSession(mock.Anything).Once().Return(nil)
+	replica.EXPECT().DeleteSession(mock.Anything).Once().Return(nil)
 
-	target.deleteSessions()
+	target.deleteSessions(t.Context())
 }
 
 func Test_target_syncTeleporters(t *testing.T) {
@@ -80,10 +81,10 @@ func Test_target_syncTeleporters(t *testing.T) {
 		ClientByGroup:     false,
 	}
 
-	primary.EXPECT().GetTeleporter().Once().Return([]byte{}, nil)
-	replica.EXPECT().PostTeleporter([]byte{}, createPostTeleporterRequest(&gravitySettings)).Once().Return(nil)
+	primary.EXPECT().GetTeleporter(mock.Anything).Once().Return([]byte{}, nil)
+	replica.EXPECT().PostTeleporter(mock.Anything, []byte{}, createPostTeleporterRequest(&gravitySettings)).Once().Return(nil)
 
-	err := target.syncTeleporters(&gravitySettings)
+	err := target.syncTeleporters(t.Context(), &gravitySettings)
 	assert.NoError(t, err)
 }
 
@@ -116,10 +117,10 @@ func Test_target_syncConfigs(t *testing.T) {
 		Debug:     config.NewConfigSetting(false, nil, nil),
 	}
 
-	primary.EXPECT().GetConfig().Once().Return(configResponse, nil)
-	replica.EXPECT().PatchConfig(createPatchConfigRequest(&gravitySettings, configResponse)).Once().Return(nil)
+	primary.EXPECT().GetConfig(mock.Anything).Once().Return(configResponse, nil)
+	replica.EXPECT().PatchConfig(mock.Anything, createPatchConfigRequest(&gravitySettings, configResponse)).Once().Return(nil)
 
-	err := target.syncConfigs(&gravitySettings)
+	err := target.syncConfigs(t.Context(), &gravitySettings)
 	assert.NoError(t, err)
 }
 
@@ -138,10 +139,10 @@ func Test_target_runGravity(t *testing.T) {
 		Client:   mockClient,
 	}
 
-	primary.EXPECT().PostRunGravity().Once().Return(nil)
-	replica.EXPECT().PostRunGravity().Once().Return(nil)
+	primary.EXPECT().PostRunGravity(mock.Anything).Once().Return(nil)
+	replica.EXPECT().PostRunGravity(mock.Anything).Once().Return(nil)
 
-	err := target.runGravity()
+	err := target.runGravity(t.Context())
 	assert.NoError(t, err)
 }
 
