@@ -13,5 +13,6 @@ func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) healthy() bool {
-	return len(s.state.Stack) > 0 && s.state.Stack[0].Success
+	latest, ok := s.state.Latest()
+	return ok && latest.Success
 }

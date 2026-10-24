@@ -1,11 +1,13 @@
 package config
 
 import (
+	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/lovelaze/nebula-sync/internal/pihole/model"
 	"github.com/lovelaze/nebula-sync/internal/sync/filter"
 )
 
@@ -191,4 +193,46 @@ func TestConfig_NewConfigSetting(t *testing.T) {
 	assert.NotNil(t, exclude.Filter)
 	assert.Equal(t, filter.Exclude, exclude.Filter.Type)
 	assert.Equal(t, []string{"key1", "key2"}, exclude.Filter.Keys)
+}
+
+func TestConfig_String_RedactsSecrets(t *testing.T) {
+	primaryURL, err := url.Parse("http://ph1.example.com")
+	require.NoError(t, err)
+	replicaURL, err := url.Parse("http://ph2.example.com")
+	require.NoError(t, err)
+
+	conf := Config{
+		Primary:  model.PiHole{URL: primaryURL, Password: "primary-secret"},
+		Replicas: []model.PiHole{{URL: replicaURL, Password: "replica-secret"}},
+		Sync: &Sync{
+			WebhookSettings: &WebhookSettings{
+				Failure: WebhookRequest{
+					URL:     "http://failure.example.com",
+					Method:  "POST",
+					Body:    "token=body-secret",
+					Headers: map[string]string{"Authorization": "Bearer header-secret"},
+				},
+			},
+		},
+	}
+
+	out := conf.String()
+
+	for _, secret := range []string{"primary-secret", "replica-secret", "body-secret", "header-secret"} {
+		assert.NotContains(t, out, secret)
+	}
+
+	assert.Contains(t, out, "http://ph1.example.com")
+	assert.Contains(t, out, "http://ph2.example.com")
+	assert.Contains(t, out, "http://failure.example.com")
+	assert.Contains(t, out, "Authorization")
+}
+
+func TestSync_String_RendersCron(t *testing.T) {
+	schedule := "0 * * * *"
+	withCron := Sync{Cron: &schedule}
+	assert.Contains(t, withCron.String(), "Cron:0 * * * *")
+
+	withoutCron := Sync{}
+	assert.Contains(t, withoutCron.String(), "Cron:<nil>")
 }
