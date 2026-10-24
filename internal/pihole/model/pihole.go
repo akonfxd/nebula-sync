@@ -26,7 +26,7 @@ func NewPiHole(host, password string) PiHole {
 	}
 }
 
-func (ph *PiHole) String() string {
+func (ph PiHole) String() string {
 	return fmt.Sprintf("{URL:%s}", ph.URL)
 }
 

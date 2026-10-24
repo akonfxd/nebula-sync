@@ -2,6 +2,9 @@ package config
 
 import (
 	"fmt"
+	"maps"
+	"slices"
+	"strings"
 
 	"github.com/kelseyhightower/envconfig"
 
@@ -213,7 +216,15 @@ func (c *Config) String() string {
 }
 
 func (s *Sync) String() string {
-	return fmt.Sprintf("%+v", *s)
+	return fmt.Sprintf(
+		"{FullSync:%t Cron:%s RunGravity:%t GravitySettings:%v ConfigSettings:%v WebhookSettings:%v}",
+		s.FullSync,
+		derefString(s.Cron),
+		s.RunGravity,
+		s.GravitySettings,
+		s.ConfigSettings,
+		s.WebhookSettings,
+	)
 }
 
 func (a *API) String() string {
@@ -236,10 +247,45 @@ func (cs *ConfigFilter) String() string {
 	return fmt.Sprintf("%+v", *cs)
 }
 
-func (wes *WebhookRequest) String() string {
-	return fmt.Sprintf("%+v", *wes)
+func (wes WebhookRequest) String() string {
+	return fmt.Sprintf(
+		"{Body:%s Headers:%s Method:%s URL:%s}",
+		redactValue(wes.Body),
+		redactMapValues(wes.Headers),
+		wes.Method,
+		wes.URL,
+	)
 }
 
 func (wes *WebhookSettings) String() string {
 	return fmt.Sprintf("%+v", *wes)
+}
+
+const redactedValue = "<redacted>"
+
+func derefString(value *string) string {
+	if value == nil {
+		return "<nil>"
+	}
+	return *value
+}
+
+func redactValue(value string) string {
+	if value == "" {
+		return ""
+	}
+	return redactedValue
+}
+
+func redactMapValues(values map[string]string) string {
+	if len(values) == 0 {
+		return "map[]"
+	}
+
+	pairs := make([]string, 0, len(values))
+	for _, key := range slices.Sorted(maps.Keys(values)) {
+		pairs = append(pairs, key+":"+redactedValue)
+	}
+
+	return "map[" + strings.Join(pairs, " ") + "]"
 }
