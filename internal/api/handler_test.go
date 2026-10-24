@@ -16,8 +16,8 @@ func TestHealthHandler_healthy(t *testing.T) {
 	state := sync.NewState()
 	state.OnSuccess()
 
-	require.Len(t, state.Stack, 1)
-	require.True(t, state.Stack[0].Success)
+	require.Len(t, state.Outcomes(), 1)
+	require.True(t, state.Outcomes()[0].Success)
 
 	server := NewServer(state)
 
@@ -36,8 +36,8 @@ func TestHealthHandler_unhealthy(t *testing.T) {
 	state := sync.NewState()
 	state.OnFailure(errors.New(("test error")))
 
-	require.Len(t, state.Stack, 1)
-	require.False(t, state.Stack[0].Success)
+	require.Len(t, state.Outcomes(), 1)
+	require.False(t, state.Outcomes()[0].Success)
 
 	server := NewServer(state)
 
