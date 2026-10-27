@@ -3,6 +3,7 @@ package sync
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
@@ -58,6 +59,13 @@ func TestTarget_SelectiveSync(t *testing.T) {
 	primary.EXPECT().DeleteSession(mock.Anything).Once().Return(nil)
 	replica.EXPECT().DeleteSession(mock.Anything).Once().Return(nil)
 
-	err := target.SelectiveSync(t.Context(), &settings)
+	replica.EXPECT().String().Return("http://replica").Maybe()
+
+	report, err := target.SelectiveSync(t.Context(), &settings)
 	require.NoError(t, err)
+
+	require.NotNil(t, report)
+	assert.Equal(t, "selective", report.Mode)
+	assert.Equal(t, 1, report.Succeeded())
+	assert.Zero(t, report.Failed())
 }

@@ -22,13 +22,26 @@ func NewState() *State {
 type Outcome struct {
 	Timestamp time.Time
 	Success   bool
+	Mode      string
+	Duration  time.Duration
+	Err       error
+	Replicas  []ReplicaReport
 }
 
-func NewOutcome(success bool) *Outcome {
-	return &Outcome{
+func NewOutcome(report *Report, err error) Outcome {
+	outcome := Outcome{
 		Timestamp: time.Now(),
-		Success:   success,
+		Success:   err == nil,
+		Err:       err,
 	}
+
+	if report != nil {
+		outcome.Mode = report.Mode
+		outcome.Duration = report.Duration
+		outcome.Replicas = slices.Clone(report.Replicas)
+	}
+
+	return outcome
 }
 
 func (s *State) Add(outcome Outcome) {
@@ -60,10 +73,6 @@ func (s *State) Latest() (Outcome, bool) {
 	return s.stack[0], true
 }
 
-func (s *State) OnSuccess() {
-	s.Add(*NewOutcome(true))
-}
-
-func (s *State) OnFailure(err error) {
-	s.Add(*NewOutcome(false))
+func (s *State) Record(report *Report, err error) {
+	s.Add(NewOutcome(report, err))
 }

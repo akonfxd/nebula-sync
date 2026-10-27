@@ -28,14 +28,11 @@ type Service struct {
 }
 
 func NewService(target sync.Target, conf config.Config, callbacks ...sync.Callback) *Service {
-	state := sync.NewState()
-	cbs := append([]sync.Callback{state}, callbacks...)
-
 	return &Service{
 		target:    target,
 		conf:      conf,
-		callbacks: cbs,
-		State:     state,
+		callbacks: callbacks,
+		State:     sync.NewState(),
 	}
 }
 
@@ -90,13 +87,16 @@ func (service *Service) Run(ctx context.Context) error {
 }
 
 func (service *Service) sync(ctx context.Context, t sync.Target) error {
+	var report *sync.Report
 	var err error
+
 	if service.conf.Sync.FullSync {
-		err = t.FullSync(ctx, service.conf.Sync)
+		report, err = t.FullSync(ctx, service.conf.Sync)
 	} else {
-		err = t.SelectiveSync(ctx, service.conf.Sync)
+		report, err = t.SelectiveSync(ctx, service.conf.Sync)
 	}
 
+	service.State.Record(report, err)
 	service.runCallbacks(err)
 
 	if err == nil {

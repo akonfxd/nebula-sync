@@ -30,7 +30,7 @@ func Test_target_authenticate(t *testing.T) {
 	primary.EXPECT().PostAuth(mock.Anything).Once().Return(nil)
 	replica.EXPECT().PostAuth(mock.Anything).Once().Return(nil)
 
-	err := target.authenticate(t.Context())
+	err := target.authenticate(t.Context(), newRun("full", target.Replicas))
 	assert.NoError(t, err)
 }
 
@@ -84,7 +84,7 @@ func Test_target_syncTeleporters(t *testing.T) {
 	primary.EXPECT().GetTeleporter(mock.Anything).Once().Return([]byte{}, nil)
 	replica.EXPECT().PostTeleporter(mock.Anything, []byte{}, createPostTeleporterRequest(&gravitySettings)).Once().Return(nil)
 
-	err := target.syncTeleporters(t.Context(), &gravitySettings)
+	err := target.syncTeleporters(t.Context(), newRun("full", target.Replicas), &gravitySettings)
 	assert.NoError(t, err)
 }
 
@@ -120,7 +120,7 @@ func Test_target_syncConfigs(t *testing.T) {
 	primary.EXPECT().GetConfig(mock.Anything).Once().Return(configResponse, nil)
 	replica.EXPECT().PatchConfig(mock.Anything, createPatchConfigRequest(&gravitySettings, configResponse)).Once().Return(nil)
 
-	err := target.syncConfigs(t.Context(), &gravitySettings)
+	err := target.syncConfigs(t.Context(), newRun("full", target.Replicas), &gravitySettings)
 	assert.NoError(t, err)
 }
 
@@ -142,7 +142,7 @@ func Test_target_runGravity(t *testing.T) {
 	primary.EXPECT().PostRunGravity(mock.Anything).Once().Return(nil)
 	replica.EXPECT().PostRunGravity(mock.Anything).Once().Return(nil)
 
-	err := target.runGravity(t.Context())
+	err := target.runGravity(t.Context(), newRun("full", target.Replicas))
 	assert.NoError(t, err)
 }
 

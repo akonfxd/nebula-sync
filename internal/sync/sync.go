@@ -17,8 +17,8 @@ import (
 const cleanupTimeout = 30 * time.Second
 
 type Target interface {
-	FullSync(ctx context.Context, sync *config.Sync) error
-	SelectiveSync(ctx context.Context, sync *config.Sync) error
+	FullSync(ctx context.Context, sync *config.Sync) (*Report, error)
+	SelectiveSync(ctx context.Context, sync *config.Sync) (*Report, error)
 }
 
 type target struct {
@@ -34,8 +34,9 @@ func NewTarget(primary pihole.Client, replicas []pihole.Client) Target {
 	}
 }
 
-func (target *target) sync(ctx context.Context, syncFunc func() error, mode string) error {
+func (target *target) sync(ctx context.Context, syncFunc func(*run) error, mode string) (*Report, error) {
 	var err error
+	currentRun := newRun(mode, target.Replicas)
 	log.Info().Str("mode", mode).Int("replicas", len(target.Replicas)).Msg("Running sync")
 
 	defer func() {
@@ -49,29 +50,36 @@ func (target *target) sync(ctx context.Context, syncFunc func() error, mode stri
 		target.deleteSessions(cleanupCtx)
 	}()
 
-	if authErr := target.authenticate(ctx); authErr != nil {
+	if authErr := target.authenticate(ctx, currentRun); authErr != nil {
 		err = fmt.Errorf("authenticate: %w", authErr)
-		return err
+		return currentRun.report(), err
 	}
 
-	err = syncFunc()
+	err = syncFunc(currentRun)
+	report := currentRun.report()
 
-	return err
+	if failed := report.Failed(); failed > 0 {
+		log.Warn().Int("failed", failed).Int("succeeded", report.Succeeded()).Msg("Replicas failed during sync")
+	}
+
+	if err == nil {
+		err = report.Err()
+	}
+
+	return report, err
 }
 
-func (target *target) authenticate(ctx context.Context) error {
+func (target *target) authenticate(ctx context.Context, currentRun *run) error {
 	log.Info().Msg("Authenticating clients...")
 	if err := target.Primary.PostAuth(ctx); err != nil {
-		return err
+		return fmt.Errorf("primary: %w", err)
 	}
 
-	for _, replica := range target.Replicas {
-		if err := retry.Fixed(ctx, func() error {
+	currentRun.forEachReplica("authenticate", func(replica pihole.Client) error {
+		return retry.Fixed(ctx, func() error {
 			return replica.PostAuth(ctx)
-		}, retry.AttemptsPostAuth); err != nil {
-			return err
-		}
-	}
+		}, retry.AttemptsPostAuth)
+	})
 
 	return nil
 }
@@ -91,11 +99,11 @@ func (target *target) deleteSessions(ctx context.Context) {
 	}
 }
 
-func (target *target) syncTeleporters(ctx context.Context, gravitySettings *config.GravitySettings) error {
+func (target *target) syncTeleporters(ctx context.Context, currentRun *run, gravitySettings *config.GravitySettings) error {
 	log.Info().Msg("Syncing teleporters...")
 	conf, err := target.Primary.GetTeleporter(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("primary: %w", err)
 	}
 
 	var teleporterRequest *model.PostTeleporterRequest
@@ -103,51 +111,45 @@ func (target *target) syncTeleporters(ctx context.Context, gravitySettings *conf
 		teleporterRequest = createPostTeleporterRequest(gravitySettings)
 	}
 
-	for _, replica := range target.Replicas {
-		if err := retry.Fixed(ctx, func() error {
+	currentRun.forEachReplica("teleporter", func(replica pihole.Client) error {
+		return retry.Fixed(ctx, func() error {
 			return replica.PostTeleporter(ctx, conf, teleporterRequest)
-		}, retry.AttemptsPostTeleporter); err != nil {
-			return err
-		}
-	}
+		}, retry.AttemptsPostTeleporter)
+	})
 
 	return nil
 }
 
-func (target *target) syncConfigs(ctx context.Context, configSettings *config.ConfigSettings) error {
+func (target *target) syncConfigs(ctx context.Context, currentRun *run, configSettings *config.ConfigSettings) error {
 	log.Info().Msg("Syncing configs...")
 	configResponse, err := target.Primary.GetConfig(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("primary: %w", err)
 	}
 
 	configRequest := createPatchConfigRequest(configSettings, configResponse)
 
-	for _, replica := range target.Replicas {
-		if err := retry.Fixed(ctx, func() error {
+	currentRun.forEachReplica("config", func(replica pihole.Client) error {
+		return retry.Fixed(ctx, func() error {
 			return replica.PatchConfig(ctx, configRequest)
-		}, retry.AttemptsPatchConfig); err != nil {
-			return err
-		}
-	}
+		}, retry.AttemptsPatchConfig)
+	})
 
 	return nil
 }
 
-func (target *target) runGravity(ctx context.Context) error {
+func (target *target) runGravity(ctx context.Context, currentRun *run) error {
 	log.Info().Msg("Running gravity...")
 
 	if err := target.Primary.PostRunGravity(ctx); err != nil {
-		return err
+		return fmt.Errorf("primary: %w", err)
 	}
 
-	for _, replica := range target.Replicas {
-		if err := retry.Fixed(ctx, func() error {
+	currentRun.forEachReplica("gravity", func(replica pihole.Client) error {
+		return retry.Fixed(ctx, func() error {
 			return replica.PostRunGravity(ctx)
-		}, retry.AttemptsPostRunGravity); err != nil {
-			return err
-		}
-	}
+		}, retry.AttemptsPostRunGravity)
+	})
 
 	return nil
 }

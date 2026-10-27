@@ -33,12 +33,19 @@ func TestTarget_FullSync(t *testing.T) {
 	primary.EXPECT().DeleteSession(mock.Anything).Once().Return(nil)
 	replica.EXPECT().DeleteSession(mock.Anything).Once().Return(nil)
 
-	err := target.FullSync(t.Context(), &config.Sync{
+	replica.EXPECT().String().Return("http://replica").Maybe()
+
+	report, err := target.FullSync(t.Context(), &config.Sync{
 		FullSync:   true,
 		Cron:       nil,
 		RunGravity: true,
 	})
 	require.NoError(t, err)
+
+	require.NotNil(t, report)
+	assert.Equal(t, "full", report.Mode)
+	assert.Equal(t, 1, report.Succeeded())
+	assert.Zero(t, report.Failed())
 }
 
 func Test_newFullSyncConfigSettings(t *testing.T) {

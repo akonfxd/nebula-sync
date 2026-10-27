@@ -14,7 +14,7 @@ import (
 
 func TestHealthHandler_healthy(t *testing.T) {
 	state := sync.NewState()
-	state.OnSuccess()
+	state.Record(nil, nil)
 
 	require.Len(t, state.Outcomes(), 1)
 	require.True(t, state.Outcomes()[0].Success)
@@ -34,7 +34,7 @@ func TestHealthHandler_healthy(t *testing.T) {
 
 func TestHealthHandler_unhealthy(t *testing.T) {
 	state := sync.NewState()
-	state.OnFailure(errors.New(("test error")))
+	state.Record(nil, errors.New("test error"))
 
 	require.Len(t, state.Outcomes(), 1)
 	require.False(t, state.Outcomes()[0].Success)

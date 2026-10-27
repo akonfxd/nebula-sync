@@ -8,6 +8,7 @@ import (
 	"context"
 
 	"github.com/lovelaze/nebula-sync/internal/config"
+	"github.com/lovelaze/nebula-sync/internal/sync"
 	mock "github.com/stretchr/testify/mock"
 )
 
@@ -48,20 +49,31 @@ func (_m *Target) EXPECT() *Target_Expecter {
 }
 
 // FullSync provides a mock function for the type Target
-func (_mock *Target) FullSync(ctx context.Context, sync *config.Sync) error {
-	ret := _mock.Called(ctx, sync)
+func (_mock *Target) FullSync(ctx context.Context, sync1 *config.Sync) (*sync.Report, error) {
+	ret := _mock.Called(ctx, sync1)
 
 	if len(ret) == 0 {
 		panic("no return value specified for FullSync")
 	}
 
-	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, *config.Sync) error); ok {
-		r0 = returnFunc(ctx, sync)
-	} else {
-		r0 = ret.Error(0)
+	var r0 *sync.Report
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *config.Sync) (*sync.Report, error)); ok {
+		return returnFunc(ctx, sync1)
 	}
-	return r0
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *config.Sync) *sync.Report); ok {
+		r0 = returnFunc(ctx, sync1)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*sync.Report)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, *config.Sync) error); ok {
+		r1 = returnFunc(ctx, sync1)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
 }
 
 // Target_FullSync_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FullSync'
@@ -71,12 +83,12 @@ type Target_FullSync_Call struct {
 
 // FullSync is a helper method to define mock.On call
 //   - ctx context.Context
-//   - sync *config.Sync
-func (_e *Target_Expecter) FullSync(ctx any, sync any) *Target_FullSync_Call {
-	return &Target_FullSync_Call{Call: _e.mock.On("FullSync", ctx, sync)}
+//   - sync1 *config.Sync
+func (_e *Target_Expecter) FullSync(ctx any, sync1 any) *Target_FullSync_Call {
+	return &Target_FullSync_Call{Call: _e.mock.On("FullSync", ctx, sync1)}
 }
 
-func (_c *Target_FullSync_Call) Run(run func(ctx context.Context, sync *config.Sync)) *Target_FullSync_Call {
+func (_c *Target_FullSync_Call) Run(run func(ctx context.Context, sync1 *config.Sync)) *Target_FullSync_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -94,31 +106,42 @@ func (_c *Target_FullSync_Call) Run(run func(ctx context.Context, sync *config.S
 	return _c
 }
 
-func (_c *Target_FullSync_Call) Return(err error) *Target_FullSync_Call {
-	_c.Call.Return(err)
+func (_c *Target_FullSync_Call) Return(report *sync.Report, err error) *Target_FullSync_Call {
+	_c.Call.Return(report, err)
 	return _c
 }
 
-func (_c *Target_FullSync_Call) RunAndReturn(run func(ctx context.Context, sync *config.Sync) error) *Target_FullSync_Call {
+func (_c *Target_FullSync_Call) RunAndReturn(run func(ctx context.Context, sync1 *config.Sync) (*sync.Report, error)) *Target_FullSync_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // SelectiveSync provides a mock function for the type Target
-func (_mock *Target) SelectiveSync(ctx context.Context, sync *config.Sync) error {
-	ret := _mock.Called(ctx, sync)
+func (_mock *Target) SelectiveSync(ctx context.Context, sync1 *config.Sync) (*sync.Report, error) {
+	ret := _mock.Called(ctx, sync1)
 
 	if len(ret) == 0 {
 		panic("no return value specified for SelectiveSync")
 	}
 
-	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, *config.Sync) error); ok {
-		r0 = returnFunc(ctx, sync)
-	} else {
-		r0 = ret.Error(0)
+	var r0 *sync.Report
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *config.Sync) (*sync.Report, error)); ok {
+		return returnFunc(ctx, sync1)
 	}
-	return r0
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *config.Sync) *sync.Report); ok {
+		r0 = returnFunc(ctx, sync1)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*sync.Report)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, *config.Sync) error); ok {
+		r1 = returnFunc(ctx, sync1)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
 }
 
 // Target_SelectiveSync_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SelectiveSync'
@@ -128,12 +151,12 @@ type Target_SelectiveSync_Call struct {
 
 // SelectiveSync is a helper method to define mock.On call
 //   - ctx context.Context
-//   - sync *config.Sync
-func (_e *Target_Expecter) SelectiveSync(ctx any, sync any) *Target_SelectiveSync_Call {
-	return &Target_SelectiveSync_Call{Call: _e.mock.On("SelectiveSync", ctx, sync)}
+//   - sync1 *config.Sync
+func (_e *Target_Expecter) SelectiveSync(ctx any, sync1 any) *Target_SelectiveSync_Call {
+	return &Target_SelectiveSync_Call{Call: _e.mock.On("SelectiveSync", ctx, sync1)}
 }
 
-func (_c *Target_SelectiveSync_Call) Run(run func(ctx context.Context, sync *config.Sync)) *Target_SelectiveSync_Call {
+func (_c *Target_SelectiveSync_Call) Run(run func(ctx context.Context, sync1 *config.Sync)) *Target_SelectiveSync_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -151,12 +174,12 @@ func (_c *Target_SelectiveSync_Call) Run(run func(ctx context.Context, sync *con
 	return _c
 }
 
-func (_c *Target_SelectiveSync_Call) Return(err error) *Target_SelectiveSync_Call {
-	_c.Call.Return(err)
+func (_c *Target_SelectiveSync_Call) Return(report *sync.Report, err error) *Target_SelectiveSync_Call {
+	_c.Call.Return(report, err)
 	return _c
 }
 
-func (_c *Target_SelectiveSync_Call) RunAndReturn(run func(ctx context.Context, sync *config.Sync) error) *Target_SelectiveSync_Call {
+func (_c *Target_SelectiveSync_Call) RunAndReturn(run func(ctx context.Context, sync1 *config.Sync) (*sync.Report, error)) *Target_SelectiveSync_Call {
 	_c.Call.Return(run)
 	return _c
 }

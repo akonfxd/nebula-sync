@@ -14,18 +14,18 @@ func TestState_Add(t *testing.T) {
 	s := NewState()
 	require.Empty(t, s.Outcomes())
 
-	outcome := *NewOutcome(true)
+	outcome := NewOutcome(nil, nil)
 	s.Add(outcome)
 
 	assert.Len(t, s.Outcomes(), 1)
 	assert.Contains(t, s.Outcomes(), outcome)
 }
 
-func TestState_OnSuccess(t *testing.T) {
+func TestState_Record_success(t *testing.T) {
 	s := NewState()
 	require.Empty(t, s.Outcomes())
 
-	s.OnSuccess()
+	s.Record(nil, nil)
 
 	assert.Len(t, s.Outcomes(), 1)
 	assert.True(t, s.Outcomes()[0].Success)
@@ -33,14 +33,16 @@ func TestState_OnSuccess(t *testing.T) {
 	assert.WithinRange(t, s.Outcomes()[0].Timestamp, now.Add(-1*time.Second), now.Add(1*time.Second))
 }
 
-func TestState_OnFailure(t *testing.T) {
+func TestState_Record_failure(t *testing.T) {
 	s := NewState()
 	require.Empty(t, s.Outcomes())
 
-	s.OnFailure(errors.New("test error"))
+	syncErr := errors.New("test error")
+	s.Record(nil, syncErr)
 
 	assert.Len(t, s.Outcomes(), 1)
 	assert.False(t, s.Outcomes()[0].Success)
+	require.ErrorIs(t, s.Outcomes()[0].Err, syncErr)
 	now := time.Now()
 	assert.WithinRange(t, s.Outcomes()[0].Timestamp, now.Add(-1*time.Second), now.Add(1*time.Second))
 }
@@ -50,7 +52,9 @@ func TestState_ConcurrentAccess(t *testing.T) {
 
 	var wg sync.WaitGroup
 	for range 100 {
-		wg.Go(s.OnSuccess)
+		wg.Go(func() {
+			s.Record(nil, nil)
+		})
 		wg.Go(func() {
 			s.Latest()
 			s.Outcomes()
@@ -71,7 +75,7 @@ func TestState_Latest_Empty(t *testing.T) {
 
 func TestState_Outcomes_IsACopy(t *testing.T) {
 	s := NewState()
-	s.OnSuccess()
+	s.Record(nil, nil)
 
 	outcomes := s.Outcomes()
 	outcomes[0].Success = false
@@ -79,4 +83,27 @@ func TestState_Outcomes_IsACopy(t *testing.T) {
 	latest, ok := s.Latest()
 	require.True(t, ok)
 	assert.True(t, latest.Success)
+}
+
+func TestState_Record_carriesReport(t *testing.T) {
+	s := NewState()
+
+	report := &Report{
+		Mode:     "full",
+		Duration: time.Second,
+		Replicas: []ReplicaReport{{Target: "http://replica", Duration: time.Millisecond}},
+	}
+	s.Record(report, nil)
+
+	latest, ok := s.Latest()
+	require.True(t, ok)
+	assert.Equal(t, "full", latest.Mode)
+	assert.Equal(t, time.Second, latest.Duration)
+	require.Len(t, latest.Replicas, 1)
+	assert.Equal(t, "http://replica", latest.Replicas[0].Target)
+
+	report.Replicas[0].Target = "mutated"
+	latest, ok = s.Latest()
+	require.True(t, ok)
+	assert.Equal(t, "http://replica", latest.Replicas[0].Target)
 }
