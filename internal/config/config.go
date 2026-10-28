@@ -17,6 +17,7 @@ type Config struct {
 	Replicas []model.PiHole `ignored:"true" required:"true" envconfig:"REPLICAS"`
 	Client   *Client        `ignored:"true"`
 	Sync     *Sync          `ignored:"true"`
+	Store    *Store         `ignored:"true"`
 	API      *API           `                               envconfig:"API"`
 }
 
@@ -162,15 +163,11 @@ func NewConfigSetting(enabled bool, included, excluded []string) *ConfigSetting 
 }
 
 func (c *Config) Load() error {
-	if err := envconfig.Process("", c); err != nil {
+	if err := c.LoadRuntime(); err != nil {
 		return err
 	}
 
 	if err := c.loadTargets(); err != nil {
-		return err
-	}
-
-	if err := c.loadClient(); err != nil {
 		return err
 	}
 
@@ -179,6 +176,18 @@ func (c *Config) Load() error {
 	}
 
 	return c.loadWebhookSettings()
+}
+
+func (c *Config) LoadRuntime() error {
+	if err := envconfig.Process("", c); err != nil {
+		return err
+	}
+
+	if err := c.loadClient(); err != nil {
+		return err
+	}
+
+	return c.loadStore()
 }
 
 func (c *Config) loadSync() error {

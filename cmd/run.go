@@ -16,13 +16,19 @@ var runCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		readEnvFile()
 
-		service, err := service.Init()
+		svc, err := service.Init(cmd.Context())
 		if err != nil {
 			log.Fatal().Err(err).Msg("Failed to initialize service")
 		}
 
-		if err = service.Run(cmd.Context()); err != nil {
-			log.Fatal().Err(err).Msg("Sync failed")
+		runErr := svc.Run(cmd.Context())
+
+		if closeErr := svc.Close(); closeErr != nil {
+			log.Warn().Err(closeErr).Msg("Failed to close configuration database")
+		}
+
+		if runErr != nil {
+			log.Fatal().Err(runErr).Msg("Sync failed")
 		}
 	},
 }

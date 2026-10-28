@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
@@ -17,6 +18,7 @@ type testSuite struct {
 func (suite *testSuite) SetupTest() {
 	suite.ph1 = RunPiHole("foo1")
 	suite.ph2 = RunPiHole("foo2")
+	suite.T().Setenv("DB_PATH", filepath.Join(suite.T().TempDir(), "nebula-sync.db"))
 }
 
 func TestE2E(t *testing.T) {
@@ -29,7 +31,7 @@ func (suite *testSuite) Test_FullSync() {
 	suite.T().Setenv("FULL_SYNC", "true")
 	suite.T().Setenv("RUN_GRAVITY", "true")
 
-	s, err := service.Init()
+	s, err := service.Init(suite.T().Context())
 	suite.Require().NoError(err)
 	err = s.Run(suite.T().Context())
 	suite.Require().NoError(err)
@@ -41,7 +43,7 @@ func (suite *testSuite) Test_FullSync_SSL() {
 	suite.T().Setenv("FULL_SYNC", "true")
 	suite.T().Setenv("CLIENT_SKIP_TLS_VERIFICATION", "true")
 
-	s, err := service.Init()
+	s, err := service.Init(suite.T().Context())
 	suite.Require().NoError(err)
 	err = s.Run(suite.T().Context())
 	suite.Require().NoError(err)
@@ -55,7 +57,7 @@ func (suite *testSuite) Test_SelectiveSync() {
 	setAllManualConfig(suite)
 	setAllManualGravity(suite)
 
-	s, err := service.Init()
+	s, err := service.Init(suite.T().Context())
 	suite.Require().NoError(err)
 	err = s.Run(suite.T().Context())
 	suite.Require().NoError(err)
@@ -76,7 +78,7 @@ func (suite *testSuite) Test_SelectiveSync_Include() {
 	suite.T().Setenv("SYNC_CONFIG_MISC_INCLUDE", "nice,delay_startup")
 	suite.T().Setenv("SYNC_CONFIG_DEBUG_INCLUDE", "database,networking")
 
-	s, err := service.Init()
+	s, err := service.Init(suite.T().Context())
 	suite.Require().NoError(err)
 	err = s.Run(suite.T().Context())
 	suite.Require().NoError(err)
@@ -97,7 +99,7 @@ func (suite *testSuite) Test_SelectiveSync_Exclude() {
 	suite.T().Setenv("SYNC_CONFIG_MISC_EXCLUDE", "nice,delay_startup")
 	suite.T().Setenv("SYNC_CONFIG_DEBUG_EXCLUDE", "database,networking")
 
-	s, err := service.Init()
+	s, err := service.Init(suite.T().Context())
 	suite.Require().NoError(err)
 	err = s.Run(suite.T().Context())
 	suite.Require().NoError(err)

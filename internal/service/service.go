@@ -11,6 +11,7 @@ import (
 	"github.com/lovelaze/nebula-sync/internal/api"
 	"github.com/lovelaze/nebula-sync/internal/config"
 	"github.com/lovelaze/nebula-sync/internal/pihole"
+	"github.com/lovelaze/nebula-sync/internal/store"
 	"github.com/lovelaze/nebula-sync/internal/sync"
 	"github.com/lovelaze/nebula-sync/internal/sync/retry"
 	"github.com/lovelaze/nebula-sync/internal/webhook"
@@ -25,6 +26,7 @@ type Service struct {
 	callbacks []sync.Callback
 	State     *sync.State
 	server    *api.Server
+	store     *store.Store
 }
 
 func NewService(target sync.Target, conf config.Config, callbacks ...sync.Callback) *Service {
@@ -36,9 +38,19 @@ func NewService(target sync.Target, conf config.Config, callbacks ...sync.Callba
 	}
 }
 
-func Init() (*Service, error) {
+func Init(ctx context.Context) (*Service, error) {
 	conf := config.Config{}
-	if err := conf.Load(); err != nil {
+	if err := conf.LoadRuntime(); err != nil {
+		return nil, err
+	}
+
+	configStore, err := store.Open(ctx, conf.Store)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := loadStoredConfig(ctx, configStore, &conf); err != nil {
+		_ = configStore.Close()
 		return nil, err
 	}
 
@@ -60,7 +72,50 @@ func Init() (*Service, error) {
 		service.server = api.NewServer(service.State, conf.API.Addr)
 	}
 
+	service.store = configStore
+
 	return service, nil
+}
+
+func loadStoredConfig(ctx context.Context, configStore *store.Store, conf *config.Config) error {
+	seeded, err := configStore.Seeded(ctx)
+	if err != nil {
+		return err
+	}
+
+	if seeded {
+		if ignored := config.IgnoredSyncEnvVars(); len(ignored) > 0 {
+			log.Warn().
+				Strs("vars", ignored).
+				Msg("Stored configuration is authoritative, these environment variables are ignored")
+		}
+	} else {
+		envConf := config.Config{}
+		if err := envConf.Load(); err != nil {
+			return fmt.Errorf("no stored configuration and environment is incomplete: %w", err)
+		}
+
+		if err := configStore.SeedFromEnv(ctx, &envConf); err != nil {
+			return err
+		}
+
+		log.Info().Msg("Seeded configuration from environment")
+	}
+
+	snapshot, err := configStore.LoadSnapshot(ctx)
+	if err != nil {
+		return err
+	}
+
+	conf.Primary = snapshot.Primary
+	conf.Replicas = snapshot.Replicas
+	conf.Sync = snapshot.Sync
+
+	return nil
+}
+
+func (service *Service) Close() error {
+	return service.store.Close()
 }
 
 func (service *Service) Run(ctx context.Context) error {
