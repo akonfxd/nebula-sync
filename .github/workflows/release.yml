@@ -4,6 +4,13 @@ on:
   push:
     tags:
       - "v*.*.*"
+
+env:
+  # Gitea's own container registry. The owner segment has to match the account
+  # that owns this repository.
+  REGISTRY: gitea.buhnet.org
+  IMAGE: ${{ github.repository_owner }}/nebula-sync
+
 jobs:
   docker:
     runs-on: ubuntu-latest
@@ -20,19 +27,15 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Login to ghcr.io
+      # REGISTRY_TOKEN is a personal access token with package read/write.
+      # The token Actions generates for a run is not reliably accepted by the
+      # package registry, so this uses one of its own.
+      - name: Login to the registry
         uses: docker/login-action@v4
         with:
-          registry: ghcr.io
+          registry: ${{ env.REGISTRY }}
           username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v4
-        with:
-          registry: docker.io
-          username: ${{ secrets.DOCKER_HUB_USERNAME }}
-          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+          password: ${{ secrets.REGISTRY_TOKEN }}
 
       - name: Extract tag
         id: extract_tag
@@ -44,11 +47,9 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/lovelaze/nebula-sync:latest
-            ghcr.io/lovelaze/nebula-sync:${{ env.TAG }}
-            docker.io/lovelaze/nebula-sync:latest
-            docker.io/lovelaze/nebula-sync:${{ env.TAG }}
-          platforms: linux/amd64,linux/arm64,linux/arm/v6,linux/arm/v7
+            ${{ env.REGISTRY }}/${{ env.IMAGE }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ env.TAG }}
+          platforms: linux/amd64,linux/arm64
           provenance: false
           build-args: |
             VERSION=${{ env.TAG }}

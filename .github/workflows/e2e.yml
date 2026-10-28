@@ -1,0 +1,19 @@
+name: e2e
+
+# internal/pihole and e2e start real Pi-hole containers through testcontainers,
+# so this only works on a runner that can reach a docker socket. It is manual
+# rather than automatic, so a runner without one does not leave a job red.
+on:
+  workflow_dispatch:
+
+jobs:
+
+  container-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.mod"
+      - name: container tests
+        run: make container-test

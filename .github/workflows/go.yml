@@ -2,9 +2,9 @@ name: go
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "gui" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "gui" ]
 
 jobs:
 
@@ -67,10 +67,10 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - name: console
         run: make web-deps web
+      # The container suites live in e2e.yml: they need a docker socket, which
+      # not every runner has.
       - name: unit tests
         run: make unit-test
-      - name: e2e tests
-        run: make e2e-test
 
   lint:
     runs-on: ubuntu-latest
