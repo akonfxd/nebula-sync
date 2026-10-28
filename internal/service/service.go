@@ -81,7 +81,7 @@ func Init(ctx context.Context) (*Service, error) {
 }
 
 func initService(ctx context.Context, configStore *store.Store, conf config.Config) (*Service, error) {
-	if err := seedFromEnv(ctx, configStore); err != nil {
+	if err := seedFromEnv(ctx, configStore, conf.API.Enabled); err != nil {
 		return nil, err
 	}
 
@@ -166,8 +166,10 @@ func newPlan(replicas []store.Replica, httpClient *http.Client) sync.Plan {
 	return plan
 }
 
-// seedFromEnv fills an empty database from the environment, once.
-func seedFromEnv(ctx context.Context, configStore *store.Store) error {
+// seedFromEnv fills an empty database from the environment, once. With the api
+// serving there is a console to configure the instances in, so an empty
+// environment is a first run rather than a mistake.
+func seedFromEnv(ctx context.Context, configStore *store.Store, hasConsole bool) error {
 	seeded, err := configStore.Seeded(ctx)
 	if err != nil {
 		return err
@@ -185,7 +187,13 @@ func seedFromEnv(ctx context.Context, configStore *store.Store) error {
 
 	envConf := config.Config{}
 	if err := envConf.Load(); err != nil {
-		return fmt.Errorf("no stored configuration and environment is incomplete: %w", err)
+		if !hasConsole {
+			return fmt.Errorf("no stored configuration and environment is incomplete: %w", err)
+		}
+
+		log.Warn().Err(err).Msg("Nothing is configured yet, add the instances in the console")
+
+		return configStore.SeedEmpty(ctx)
 	}
 
 	if err := configStore.SeedFromEnv(ctx, &envConf); err != nil {
@@ -238,6 +246,11 @@ func (service *Service) Run(ctx context.Context) error {
 	}
 
 	syncErr := service.syncOnce(ctx, store.SourceStartup)
+	if errors.Is(syncErr, sync.ErrNoPrimary) {
+		log.Warn().Msg("Nothing is configured yet, add the instances in the console")
+
+		syncErr = nil
+	}
 
 	if err := service.applySchedule(current.conf.Sync.Cron); err != nil {
 		return err
@@ -291,8 +304,18 @@ func (service *Service) Reload(ctx context.Context) error {
 	return service.applySchedule(conf.Sync.Cron)
 }
 
+// configured reports whether there is a primary to sync from. A fresh install
+// has none until somebody adds one in the console.
+func (service *Service) configured() bool {
+	return service.current.Load().conf.Primary.URL != nil
+}
+
 // Sync starts a sync in the background so a slow run does not hold the request open.
 func (service *Service) Sync(ctx context.Context) error {
+	if !service.configured() {
+		return sync.ErrNoPrimary
+	}
+
 	if !service.running.CompareAndSwap(false, true) {
 		return sync.ErrInProgress
 	}
@@ -354,6 +377,10 @@ func (service *Service) scheduledSync() {
 
 // syncOnce runs a sync and waits for it, refusing to overlap with another one.
 func (service *Service) syncOnce(ctx context.Context, source string) error {
+	if !service.configured() {
+		return sync.ErrNoPrimary
+	}
+
 	if !service.running.CompareAndSwap(false, true) {
 		return sync.ErrInProgress
 	}

@@ -1,4 +1,5 @@
 # The console is built first and copied in, so the go build can embed it.
+# Keep this major in step with web/.nvmrc, which ci and goreleaser read.
 FROM node:22-alpine AS node
 
 WORKDIR /app

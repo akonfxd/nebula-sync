@@ -1,5 +1,12 @@
 version: 2
 
+# Every binary embeds the console, so it has to be built before the first
+# target is compiled. Hooks run once, from the project root.
+before:
+  hooks:
+    - npm --prefix web ci
+    - npm --prefix web run build
+
 builds:
   - env:
       - CGO_ENABLED=0

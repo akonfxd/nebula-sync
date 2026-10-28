@@ -384,6 +384,14 @@ func TestAPI_syncAndSchedule(t *testing.T) {
 	api.controller.syncErr = sync.ErrInProgress
 	assert.Equal(t, http.StatusConflict, api.do(t, http.MethodPost, "/api/v1/sync", nil).Code)
 
+	// A fresh install has nothing to sync from, and says so rather than failing.
+	api.controller.syncErr = sync.ErrNoPrimary
+	noPrimary := api.do(t, http.MethodPost, "/api/v1/sync", nil)
+	assert.Equal(t, http.StatusConflict, noPrimary.Code)
+	assert.Contains(t, noPrimary.Body.String(), "no primary is configured")
+
+	api.controller.syncErr = nil
+
 	bad := api.do(t, http.MethodPut, "/api/v1/schedule", map[string]any{"cron": "every tuesday"})
 	assert.Equal(t, http.StatusBadRequest, bad.Code)
 
@@ -549,6 +557,11 @@ func TestAPI_consoleOwnsEverythingElse(t *testing.T) {
 func TestAPI_healthIsStillReachable(t *testing.T) {
 	api := newTestAPI(t)
 
+	// A fresh install has not synced, and a container healthcheck must not read
+	// that as something a restart would fix.
+	assert.Equal(t, http.StatusOK, api.do(t, http.MethodGet, "/health", nil).Code)
+
+	api.server.state.Record(nil, errors.New("primary is unreachable"))
 	assert.Equal(t, http.StatusInternalServerError, api.do(t, http.MethodGet, "/health", nil).Code)
 
 	api.server.state.Record(nil, nil)

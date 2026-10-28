@@ -20,10 +20,13 @@ func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// healthy reports whether this process is working. A sync that has not run yet,
+// because nothing is configured, is not a failure: restarting would not help and
+// the console is how it gets fixed. A sync that ran and failed is.
 func (s *Server) healthy() bool {
 	latest, ok := s.state.Latest()
 
-	return ok && latest.Success
+	return !ok || latest.Success
 }
 
 // infoHandler is the only unauthenticated api route: it tells the console whether

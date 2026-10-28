@@ -89,6 +89,42 @@ func (s *Store) SeedFromEnv(ctx context.Context, conf *config.Config) error {
 	return nil
 }
 
+// SeedEmpty prepares a database that nothing has configured yet: a default
+// profile for replicas to be attached to, and no instances at all. It counts as
+// the one seed, so a later environment cannot overwrite what the operator then
+// enters in the console.
+func (s *Store) SeedEmpty(ctx context.Context) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin seed: %w", err)
+	}
+
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	profile := config.Profile{Name: config.DefaultProfileName, FullSync: true}
+	if _, err := insertProfile(ctx, tx, &profile, now); err != nil {
+		return err
+	}
+
+	if err := insertSchedule(ctx, tx, nil); err != nil {
+		return err
+	}
+
+	if err := setSetting(ctx, tx, settingSeededFromEnv, now); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit seed: %w", err)
+	}
+
+	return nil
+}
+
 func insertProfile(ctx context.Context, tx *sql.Tx, profile *config.Profile, now string) (int64, error) {
 	query := `INSERT INTO profile (name, full_sync, run_gravity, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`
 

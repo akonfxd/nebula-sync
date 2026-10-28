@@ -32,7 +32,7 @@ type Client interface {
 }
 
 func NewClient(piHole model.PiHole, httpClient *http.Client) Client {
-	logger := log.With().Str("client", piHole.URL.String()).Logger()
+	logger := log.With().Str("client", piHole.Host()).Logger()
 	return &client{
 		piHole:     piHole,
 		logger:     &logger,
@@ -324,10 +324,14 @@ func (client *client) PostRunGravity(ctx context.Context) error {
 }
 
 func (client *client) String() string {
-	return client.piHole.URL.String()
+	return client.piHole.Host()
 }
 
 func (client *client) APIPath(target string) string {
+	if client.piHole.URL == nil {
+		return ""
+	}
+
 	return client.piHole.URL.JoinPath("api", target).String()
 }
 

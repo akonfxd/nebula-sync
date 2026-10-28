@@ -407,3 +407,31 @@ func TestStore_LoadSnapshot_withoutAnyProfile(t *testing.T) {
 	_, err := store.LoadSnapshot(t.Context())
 	require.ErrorIs(t, err, errNoProfile)
 }
+
+func TestStore_SeedEmpty(t *testing.T) {
+	store := openTestStore(t, testDBPath(t), testKeyHex)
+
+	seeded, err := store.Seeded(t.Context())
+	require.NoError(t, err)
+	require.False(t, seeded)
+
+	require.NoError(t, store.SeedEmpty(t.Context()))
+
+	seeded, err = store.Seeded(t.Context())
+	require.NoError(t, err)
+	assert.True(t, seeded, "an empty seed still closes the door on the environment")
+
+	snapshot, err := store.LoadSnapshot(t.Context())
+	require.NoError(t, err)
+	assert.Nil(t, snapshot.Primary.URL)
+	assert.Empty(t, snapshot.Replicas)
+	assert.Nil(t, snapshot.Sync.Cron)
+
+	profiles, err := store.Profiles(t.Context())
+	require.NoError(t, err)
+	require.Len(t, profiles, 1)
+	assert.Equal(t, config.DefaultProfileName, profiles[0].Profile.Name)
+	assert.True(t, profiles[0].Default)
+	assert.True(t, profiles[0].Profile.FullSync)
+	assert.Zero(t, profiles[0].InUse)
+}

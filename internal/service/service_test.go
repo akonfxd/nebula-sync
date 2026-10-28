@@ -21,7 +21,7 @@ import (
 
 func testConfig() config.Config {
 	return config.Config{
-		Primary:  model.PiHole{},
+		Primary:  model.NewPiHole("http://primary.test", "pw"),
 		Replicas: []model.PiHole{},
 		Sync: &config.Sync{
 			FullSync: false,
@@ -301,4 +301,92 @@ func TestRun_keepsServingAfterAFailedFirstSync(t *testing.T) {
 	outcome, found := service.State.Latest()
 	require.True(t, found)
 	assert.False(t, outcome.Success)
+}
+
+func emptyStore(t *testing.T) *store.Store {
+	t.Helper()
+
+	path := filepath.Join(t.TempDir(), "nebula-sync.db")
+
+	configStore, err := store.Open(t.Context(), &config.Store{Path: path, PasswordCost: store.MinPasswordCost})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, configStore.Close())
+	})
+
+	return configStore
+}
+
+func TestSeedFromEnv_withoutAConsoleTheEnvironmentIsRequired(t *testing.T) {
+	t.Setenv("PRIMARY", "")
+	t.Setenv("PRIMARY_FILE", "")
+
+	err := seedFromEnv(t.Context(), emptyStore(t), false)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "environment is incomplete")
+}
+
+// A downloaded release is expected to be configured in the console, so an empty
+// environment is a first run and the process has to survive it.
+func TestSeedFromEnv_withAConsoleAnEmptyEnvironmentIsAFirstRun(t *testing.T) {
+	t.Setenv("PRIMARY", "")
+	t.Setenv("PRIMARY_FILE", "")
+
+	configStore := emptyStore(t)
+
+	require.NoError(t, seedFromEnv(t.Context(), configStore, true))
+
+	// Seeded, so setting PRIMARY later cannot overwrite what the console holds.
+	seeded, err := configStore.Seeded(t.Context())
+	require.NoError(t, err)
+	assert.True(t, seeded)
+
+	// A snapshot has to load, or the service cannot finish starting.
+	snapshot, err := configStore.LoadSnapshot(t.Context())
+	require.NoError(t, err)
+	assert.Nil(t, snapshot.Primary.URL)
+	assert.Empty(t, snapshot.Replicas)
+	assert.True(t, snapshot.Sync.FullSync)
+}
+
+func TestRun_skipsTheInitialSyncWithoutAPrimary(t *testing.T) {
+	target := syncmock.NewTarget(t)
+
+	service, configStore := testService(t, target)
+
+	conf := testConfig()
+	conf.Primary = model.PiHole{}
+	service.current.Store(&runtime{target: target, conf: conf})
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	require.NoError(t, service.Run(ctx))
+
+	target.AssertNotCalled(t, "Sync", mock.Anything, mock.Anything)
+
+	_, found := service.State.Latest()
+	assert.False(t, found, "a skipped sync records no outcome")
+
+	runs, err := configStore.Runs(t.Context(), 10)
+	require.NoError(t, err)
+	assert.Empty(t, runs, "a skipped sync is not a failed run")
+}
+
+// The console answers 409 on this, rather than starting a sync that cannot work.
+func TestSync_refusesWithoutAPrimary(t *testing.T) {
+	target := syncmock.NewTarget(t)
+
+	service, _ := testService(t, target)
+
+	conf := testConfig()
+	conf.Primary = model.PiHole{}
+	service.current.Store(&runtime{target: target, conf: conf})
+
+	require.ErrorIs(t, service.Sync(t.Context()), sync.ErrNoPrimary)
+	require.ErrorIs(t, service.syncOnce(t.Context(), store.SourceSchedule), sync.ErrNoPrimary)
+
+	assert.False(t, service.Syncing())
+	target.AssertNotCalled(t, "Sync", mock.Anything, mock.Anything)
 }

@@ -171,7 +171,7 @@ func (s *Server) syncHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch err := s.controller.Sync(r.Context()); {
-	case errors.Is(err, sync.ErrInProgress):
+	case errors.Is(err, sync.ErrInProgress), errors.Is(err, sync.ErrNoPrimary):
 		writeError(w, http.StatusConflict, err.Error())
 	case err != nil:
 		writeStoreError(w, err)

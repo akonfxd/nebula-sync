@@ -149,3 +149,13 @@ func createClient(container tc.Container) Client {
 
 	return NewClient(model.NewPiHole(host, apiPassword), httpClient)
 }
+
+// Building a client is what initService and Reload do on every configuration
+// change, including the one where there is no primary yet.
+func TestNewClient_toleratesAnUnconfiguredInstance(t *testing.T) {
+	client := NewClient(model.PiHole{}, http.DefaultClient)
+
+	assert.Empty(t, client.String())
+	assert.Empty(t, client.APIPath("config"))
+	assert.Error(t, client.PostAuth(context.Background()))
+}

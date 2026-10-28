@@ -8,6 +8,22 @@ on:
 
 jobs:
 
+  console:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: install
+        run: make web-deps
+      - name: typecheck
+        run: make web-check
+      - name: build
+        run: make web
+
   build:
     runs-on: ubuntu-latest
     steps:
@@ -15,6 +31,25 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: "go.mod"
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: console
+        run: make web-deps web
+      - name: build
+        run: go build -v ./...
+
+  build-without-console:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.mod"
+      - name: the embed placeholder is tracked
+        run: git ls-files --error-unmatch internal/api/ui/dist/.gitkeep
       - name: build
         run: go build -v ./...
 
@@ -25,6 +60,13 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: "go.mod"
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: console
+        run: make web-deps web
       - name: unit tests
         run: make unit-test
       - name: e2e tests

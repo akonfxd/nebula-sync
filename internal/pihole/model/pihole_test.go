@@ -23,3 +23,8 @@ func TestPiHole_Decode(t *testing.T) {
 	assert.Equal(t, expectedURL, ph.URL)
 	assert.Equal(t, pw, ph.Password)
 }
+
+func TestPiHole_Host_toleratesAnUnconfiguredInstance(t *testing.T) {
+	assert.Empty(t, PiHole{}.Host())
+	assert.Equal(t, "http://pihole.test", NewPiHole("http://pihole.test", "pw").Host())
+}

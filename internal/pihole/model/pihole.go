@@ -31,6 +31,16 @@ func (ph PiHole) String() string {
 	return fmt.Sprintf("{URL:%s}", ph.URL)
 }
 
+// Host is the address to talk to, empty while nothing is configured. A zero
+// PiHole is a real state now: the console fills one in on a first run.
+func (ph PiHole) Host() string {
+	if ph.URL == nil {
+		return ""
+	}
+
+	return ph.URL.String()
+}
+
 func (ph *PiHole) Decode(value string) error {
 	uri, password, found := strings.Cut(value, "|")
 

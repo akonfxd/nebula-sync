@@ -20,6 +20,9 @@ const cleanupTimeout = 30 * time.Second
 // ErrInProgress is returned when a sync is asked for while one is already running.
 var ErrInProgress = errors.New("a sync is already running")
 
+// ErrNoPrimary is returned when a sync is asked for before anything is configured.
+var ErrNoPrimary = errors.New("no primary is configured")
+
 type Target interface {
 	Sync(ctx context.Context, plan Plan) (*Report, error)
 }
