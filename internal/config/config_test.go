@@ -214,11 +214,15 @@ func TestConfig_String_RedactsSecrets(t *testing.T) {
 				},
 			},
 		},
+		Store: &Store{Path: "nebula-sync.db", EncryptionKey: "key-secret"},
+		API:   &API{Enabled: true, Addr: ":8080", AdminUsername: "admin", AdminPassword: "admin-secret"},
 	}
 
 	out := conf.String()
 
-	for _, secret := range []string{"primary-secret", "replica-secret", "body-secret", "header-secret"} {
+	for _, secret := range []string{
+		"primary-secret", "replica-secret", "body-secret", "header-secret", "key-secret", "admin-secret",
+	} {
 		assert.NotContains(t, out, secret)
 	}
 
@@ -226,6 +230,7 @@ func TestConfig_String_RedactsSecrets(t *testing.T) {
 	assert.Contains(t, out, "http://ph2.example.com")
 	assert.Contains(t, out, "http://failure.example.com")
 	assert.Contains(t, out, "Authorization")
+	assert.Contains(t, out, "AdminUsername:admin")
 }
 
 func TestSync_String_RendersCron(t *testing.T) {

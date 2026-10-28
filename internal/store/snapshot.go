@@ -37,25 +37,6 @@ type Snapshot struct {
 	Sync     *config.Sync
 }
 
-type sectionField struct {
-	name  string
-	value **config.ConfigSetting
-}
-
-func sectionFields(settings *config.ConfigSettings) []sectionField {
-	return []sectionField{
-		{"dns", &settings.DNS},
-		{"dhcp", &settings.DHCP},
-		{"ntp", &settings.NTP},
-		{"resolver", &settings.Resolver},
-		{"database", &settings.Database},
-		{"webserver", &settings.Webserver},
-		{"files", &settings.Files},
-		{"misc", &settings.Misc},
-		{"debug", &settings.Debug},
-	}
-}
-
 func (s *Store) Seeded(ctx context.Context) (bool, error) {
 	_, found, err := getSetting(ctx, s.db, settingSeededFromEnv)
 
@@ -132,7 +113,7 @@ func insertProfile(ctx context.Context, tx *sql.Tx, profile *config.Profile, now
 	return profileID, nil
 }
 
-func insertProfileGravity(ctx context.Context, tx *sql.Tx, profileID int64, gravity *config.GravitySettings) error {
+func insertProfileGravity(ctx context.Context, q querier, profileID int64, gravity *config.GravitySettings) error {
 	if gravity == nil {
 		gravity = &config.GravitySettings{}
 	}
@@ -140,7 +121,7 @@ func insertProfileGravity(ctx context.Context, tx *sql.Tx, profileID int64, grav
 	query := `INSERT INTO profile_gravity (profile_id, dhcp_leases, "group", adlist, adlist_by_group,
 		domainlist, domainlist_by_group, client, client_by_group) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
-	_, err := tx.ExecContext(ctx, query, profileID,
+	_, err := q.ExecContext(ctx, query, profileID,
 		gravity.DHCPLeases, gravity.Group, gravity.Adlist, gravity.AdlistByGroup,
 		gravity.Domainlist, gravity.DomainlistByGroup, gravity.Client, gravity.ClientByGroup)
 	if err != nil {
@@ -150,7 +131,7 @@ func insertProfileGravity(ctx context.Context, tx *sql.Tx, profileID int64, grav
 	return nil
 }
 
-func insertProfileSections(ctx context.Context, tx *sql.Tx, profileID int64, settings *config.ConfigSettings) error {
+func insertProfileSections(ctx context.Context, q querier, profileID int64, settings *config.ConfigSettings) error {
 	if settings == nil {
 		settings = &config.ConfigSettings{}
 	}
@@ -158,12 +139,12 @@ func insertProfileSections(ctx context.Context, tx *sql.Tx, profileID int64, set
 	sectionQuery := `INSERT INTO profile_section (profile_id, section, enabled, filter_type) VALUES (?, ?, ?, ?)`
 	keyQuery := `INSERT INTO profile_key (profile_id, section, key, position) VALUES (?, ?, ?, ?)`
 
-	for _, section := range sectionFields(settings) {
-		setting := *section.value
+	for _, section := range settings.Fields() {
+		setting := *section.Value
 		enabled := setting != nil && setting.Enabled
 
-		if _, err := tx.ExecContext(ctx, sectionQuery, profileID, section.name, enabled, filterTypeName(setting)); err != nil {
-			return fmt.Errorf("insert profile section %s: %w", section.name, err)
+		if _, err := q.ExecContext(ctx, sectionQuery, profileID, section.Name, enabled, filterTypeName(setting)); err != nil {
+			return fmt.Errorf("insert profile section %s: %w", section.Name, err)
 		}
 
 		if setting == nil || setting.Filter == nil {
@@ -171,8 +152,8 @@ func insertProfileSections(ctx context.Context, tx *sql.Tx, profileID int64, set
 		}
 
 		for position, key := range setting.Filter.Keys {
-			if _, err := tx.ExecContext(ctx, keyQuery, profileID, section.name, key, position); err != nil {
-				return fmt.Errorf("insert profile key %s.%s: %w", section.name, key, err)
+			if _, err := q.ExecContext(ctx, keyQuery, profileID, section.Name, key, position); err != nil {
+				return fmt.Errorf("insert profile key %s.%s: %w", section.Name, key, err)
 			}
 		}
 	}
@@ -430,13 +411,13 @@ func (s *Store) attachSections(ctx context.Context, profiles map[int64]*config.P
 	for id, profile := range profiles {
 		settings := config.ConfigSettings{}
 
-		for _, section := range sectionFields(&settings) {
-			if setting, found := stored[id][section.name]; found {
-				*section.value = setting
+		for _, section := range settings.Fields() {
+			if setting, found := stored[id][section.Name]; found {
+				*section.Value = setting
 				continue
 			}
 
-			*section.value = config.NewConfigSetting(false, nil, nil)
+			*section.Value = config.NewConfigSetting(false, nil, nil)
 		}
 
 		profile.ConfigSettings = &settings

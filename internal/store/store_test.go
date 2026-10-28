@@ -17,7 +17,7 @@ import (
 func openTestStore(t *testing.T, path, key string) *Store {
 	t.Helper()
 
-	store, err := Open(t.Context(), &config.Store{Path: path, EncryptionKey: key})
+	store, err := Open(t.Context(), &config.Store{Path: path, EncryptionKey: key, PasswordCost: MinPasswordCost})
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		require.NoError(t, store.Close())
@@ -74,20 +74,34 @@ func seedConfig() *config.Config {
 	}
 }
 
+func latestMigrationVersion(t *testing.T) int {
+	t.Helper()
+
+	names, err := migrationNames()
+	require.NoError(t, err)
+	require.NotEmpty(t, names)
+
+	version, err := migrationVersion(names[len(names)-1])
+	require.NoError(t, err)
+
+	return version
+}
+
 func TestOpen_migratesAndIsIdempotent(t *testing.T) {
 	path := testDBPath(t)
+	latest := latestMigrationVersion(t)
 
 	store := openTestStore(t, path, testKeyHex)
 
 	version, err := schemaVersion(t.Context(), store.db)
 	require.NoError(t, err)
-	assert.Equal(t, 1, version)
+	assert.Equal(t, latest, version)
 
 	reopened := openTestStore(t, path, testKeyHex)
 
 	version, err = schemaVersion(t.Context(), reopened.db)
 	require.NoError(t, err)
-	assert.Equal(t, 1, version)
+	assert.Equal(t, latest, version)
 }
 
 func TestStore_SeededReportsState(t *testing.T) {

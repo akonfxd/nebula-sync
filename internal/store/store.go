@@ -43,6 +43,8 @@ type querier interface {
 type Store struct {
 	db     *sql.DB
 	cipher *secretCipher
+	cost   int
+	absent func() []byte
 }
 
 func Open(ctx context.Context, conf *config.Store) (*Store, error) {
@@ -72,7 +74,9 @@ func Open(ctx context.Context, conf *config.Store) (*Store, error) {
 
 	log.Info().Str("path", conf.Path).Msg("Opened configuration database")
 
-	return &Store{db: db, cipher: cipher}, nil
+	cost := clampPasswordCost(conf.PasswordCost)
+
+	return &Store{db: db, cipher: cipher, cost: cost, absent: absentUserDigest(cost)}, nil
 }
 
 func (s *Store) Close() error {

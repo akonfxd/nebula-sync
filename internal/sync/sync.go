@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -15,6 +16,9 @@ import (
 )
 
 const cleanupTimeout = 30 * time.Second
+
+// ErrInProgress is returned when a sync is asked for while one is already running.
+var ErrInProgress = errors.New("a sync is already running")
 
 type Target interface {
 	Sync(ctx context.Context, plan Plan) (*Report, error)

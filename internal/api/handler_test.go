@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/lovelaze/nebula-sync/internal/config"
 	"github.com/lovelaze/nebula-sync/internal/sync"
 )
 
@@ -19,7 +20,7 @@ func TestHealthHandler_healthy(t *testing.T) {
 	require.Len(t, state.Outcomes(), 1)
 	require.True(t, state.Outcomes()[0].Success)
 
-	server := NewServer(state, ":0")
+	server := NewServer(state, nil, nil, &config.API{Addr: ":0"})
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	resp := httptest.NewRecorder()
@@ -29,7 +30,7 @@ func TestHealthHandler_healthy(t *testing.T) {
 	result := resp.Result()
 	defer result.Body.Close()
 
-	assert.Equal(t, 200, result.StatusCode)
+	assert.Equal(t, http.StatusOK, result.StatusCode)
 }
 
 func TestHealthHandler_unhealthy(t *testing.T) {
@@ -39,7 +40,7 @@ func TestHealthHandler_unhealthy(t *testing.T) {
 	require.Len(t, state.Outcomes(), 1)
 	require.False(t, state.Outcomes()[0].Success)
 
-	server := NewServer(state, ":0")
+	server := NewServer(state, nil, nil, &config.API{Addr: ":0"})
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	resp := httptest.NewRecorder()
@@ -49,5 +50,5 @@ func TestHealthHandler_unhealthy(t *testing.T) {
 	result := resp.Result()
 	defer result.Body.Close()
 
-	assert.Equal(t, 500, result.StatusCode)
+	assert.Equal(t, http.StatusInternalServerError, result.StatusCode)
 }

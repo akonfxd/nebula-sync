@@ -236,10 +236,6 @@ func (s *Sync) String() string {
 	)
 }
 
-func (a *API) String() string {
-	return fmt.Sprintf("%+v", *a)
-}
-
 func (gs *GravitySettings) String() string {
 	return fmt.Sprintf("%+v", *gs)
 }
