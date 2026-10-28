@@ -14,12 +14,12 @@ import (
 	"github.com/lovelaze/nebula-sync/internal/pihole"
 )
 
-func TestFullSync_oneReplicaFailsTheRestContinue(t *testing.T) {
+func TestSync_oneReplicaFailsTheRestContinue(t *testing.T) {
 	primary := piholemock.NewClient(t)
 	broken := piholemock.NewClient(t)
 	healthy := piholemock.NewClient(t)
 
-	target := NewTarget(primary, []pihole.Client{broken, healthy})
+	target := NewTarget(primary)
 
 	primary.EXPECT().PostAuth(mock.Anything).Once().Return(nil)
 	broken.EXPECT().PostAuth(mock.Anything).Once().Return(nil)
@@ -44,7 +44,7 @@ func TestFullSync_oneReplicaFailsTheRestContinue(t *testing.T) {
 	broken.EXPECT().String().Return("http://broken").Maybe()
 	healthy.EXPECT().String().Return("http://healthy").Maybe()
 
-	report, err := target.FullSync(t.Context(), &config.Sync{FullSync: true, RunGravity: true})
+	report, err := target.Sync(t.Context(), planOf(fullProfile("default"), broken, healthy))
 
 	require.Error(t, err)
 	require.ErrorContains(t, err, "http://broken")
@@ -63,11 +63,11 @@ func TestFullSync_oneReplicaFailsTheRestContinue(t *testing.T) {
 	require.NoError(t, report.Replicas[1].Err)
 }
 
-func TestFullSync_primaryFailureAbortsTheRun(t *testing.T) {
+func TestSync_primaryFailureAbortsTheRun(t *testing.T) {
 	primary := piholemock.NewClient(t)
 	replica := piholemock.NewClient(t)
 
-	target := NewTarget(primary, []pihole.Client{replica})
+	target := NewTarget(primary)
 
 	primary.EXPECT().PostAuth(mock.Anything).Once().Return(nil)
 	replica.EXPECT().PostAuth(mock.Anything).Once().Return(nil)
@@ -79,7 +79,7 @@ func TestFullSync_primaryFailureAbortsTheRun(t *testing.T) {
 
 	replica.EXPECT().String().Return("http://replica").Maybe()
 
-	report, err := target.FullSync(t.Context(), &config.Sync{FullSync: true, RunGravity: true})
+	report, err := target.Sync(t.Context(), planOf(fullProfile("default"), replica))
 
 	require.Error(t, err)
 	require.ErrorContains(t, err, "sync teleporters: primary: primary is down")
@@ -89,12 +89,12 @@ func TestFullSync_primaryFailureAbortsTheRun(t *testing.T) {
 	require.NoError(t, report.Replicas[0].Err)
 }
 
-func TestFullSync_replicaAuthFailureIsIsolated(t *testing.T) {
+func TestSync_replicaAuthFailureIsIsolated(t *testing.T) {
 	primary := piholemock.NewClient(t)
 	broken := piholemock.NewClient(t)
 	healthy := piholemock.NewClient(t)
 
-	target := NewTarget(primary, []pihole.Client{broken, healthy})
+	target := NewTarget(primary)
 
 	primary.EXPECT().PostAuth(mock.Anything).Once().Return(nil)
 	broken.EXPECT().PostAuth(mock.Anything).Return(errors.New("connection refused"))
@@ -113,7 +113,8 @@ func TestFullSync_replicaAuthFailureIsIsolated(t *testing.T) {
 	broken.EXPECT().String().Return("http://broken").Maybe()
 	healthy.EXPECT().String().Return("http://healthy").Maybe()
 
-	report, err := target.FullSync(t.Context(), &config.Sync{FullSync: true})
+	profile := &config.Profile{Name: "default", FullSync: true}
+	report, err := target.Sync(t.Context(), planOf(profile, broken, healthy))
 
 	require.Error(t, err)
 	require.ErrorContains(t, err, "authenticate")
@@ -152,10 +153,10 @@ func Test_run_forEachReplica_skipsFailedReplicas(t *testing.T) {
 	broken.EXPECT().String().Return("http://broken").Maybe()
 	healthy.EXPECT().String().Return("http://healthy").Maybe()
 
-	currentRun := newRun("full", []pihole.Client{broken, healthy})
+	currentRun := newRun(planOf(fullProfile("default"), broken, healthy))
 
 	var firstStep []string
-	currentRun.forEachReplica("first", func(replica pihole.Client) error {
+	currentRun.forEachReplica("first", func(replica pihole.Client, _ *Settings) error {
 		firstStep = append(firstStep, replica.String())
 		if replica == pihole.Client(broken) {
 			return errors.New("boom")
@@ -164,7 +165,7 @@ func Test_run_forEachReplica_skipsFailedReplicas(t *testing.T) {
 	})
 
 	var secondStep []string
-	currentRun.forEachReplica("second", func(replica pihole.Client) error {
+	currentRun.forEachReplica("second", func(replica pihole.Client, _ *Settings) error {
 		secondStep = append(secondStep, replica.String())
 		return nil
 	})

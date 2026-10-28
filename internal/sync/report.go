@@ -12,6 +12,8 @@ import (
 
 type ReplicaReport struct {
 	Target   string
+	Profile  string
+	Mode     string
 	Duration time.Duration
 	Err      error
 }
@@ -51,6 +53,7 @@ func (r *Report) Err() error {
 
 type replicaRun struct {
 	client   pihole.Client
+	settings *Settings
 	duration time.Duration
 	err      error
 }
@@ -61,27 +64,42 @@ type run struct {
 	replicas []*replicaRun
 }
 
-func newRun(mode string, replicas []pihole.Client) *run {
-	runs := make([]*replicaRun, 0, len(replicas))
-	for _, replica := range replicas {
-		runs = append(runs, &replicaRun{client: replica})
+func newRun(plan Plan) *run {
+	runs := make([]*replicaRun, 0, len(plan.Replicas))
+	for _, replica := range plan.Replicas {
+		settings := replica.Settings
+		if settings == nil {
+			settings = NewSettings(nil)
+		}
+
+		runs = append(runs, &replicaRun{client: replica.Client, settings: settings})
 	}
 
 	return &run{
-		mode:     mode,
+		mode:     plan.mode(),
 		start:    time.Now(),
 		replicas: runs,
 	}
 }
 
-func (r *run) forEachReplica(step string, fn func(replica pihole.Client) error) {
+func (r *run) runGravity() bool {
+	for _, replica := range r.replicas {
+		if replica.err == nil && replica.settings.RunGravity {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (r *run) forEachReplica(step string, fn func(replica pihole.Client, settings *Settings) error) {
 	for _, replica := range r.replicas {
 		if replica.err != nil {
 			continue
 		}
 
 		start := time.Now()
-		err := fn(replica.client)
+		err := fn(replica.client, replica.settings)
 		replica.duration += time.Since(start)
 
 		if err != nil {
@@ -100,6 +118,8 @@ func (r *run) report() *Report {
 	for _, replica := range r.replicas {
 		replicas = append(replicas, ReplicaReport{
 			Target:   replica.client.String(),
+			Profile:  replica.settings.Profile,
+			Mode:     replica.settings.Mode,
 			Duration: replica.duration,
 			Err:      replica.err,
 		})

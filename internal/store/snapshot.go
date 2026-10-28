@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -12,8 +13,6 @@ import (
 )
 
 const (
-	defaultProfileName = "default"
-
 	rolePrimary = "primary"
 	roleReplica = "replica"
 
@@ -25,9 +24,16 @@ const (
 	filterExclude = "exclude"
 )
 
+var errNoProfile = errors.New("no sync profile stored")
+
+type Replica struct {
+	PiHole  model.PiHole
+	Profile *config.Profile
+}
+
 type Snapshot struct {
 	Primary  model.PiHole
-	Replicas []model.PiHole
+	Replicas []Replica
 	Sync     *config.Sync
 }
 
@@ -68,7 +74,7 @@ func (s *Store) SeedFromEnv(ctx context.Context, conf *config.Config) error {
 
 	now := time.Now().UTC().Format(time.RFC3339)
 
-	profileID, err := insertProfile(ctx, tx, conf.Sync, now)
+	profileID, err := insertProfile(ctx, tx, conf.Sync.Profile(), now)
 	if err != nil {
 		return err
 	}
@@ -102,10 +108,10 @@ func (s *Store) SeedFromEnv(ctx context.Context, conf *config.Config) error {
 	return nil
 }
 
-func insertProfile(ctx context.Context, tx *sql.Tx, sync *config.Sync, now string) (int64, error) {
+func insertProfile(ctx context.Context, tx *sql.Tx, profile *config.Profile, now string) (int64, error) {
 	query := `INSERT INTO profile (name, full_sync, run_gravity, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`
 
-	result, err := tx.ExecContext(ctx, query, defaultProfileName, sync.FullSync, sync.RunGravity, now, now)
+	result, err := tx.ExecContext(ctx, query, profile.Name, profile.FullSync, profile.RunGravity, now, now)
 	if err != nil {
 		return 0, fmt.Errorf("insert profile: %w", err)
 	}
@@ -115,11 +121,11 @@ func insertProfile(ctx context.Context, tx *sql.Tx, sync *config.Sync, now strin
 		return 0, fmt.Errorf("insert profile: %w", err)
 	}
 
-	if err := insertProfileGravity(ctx, tx, profileID, sync.GravitySettings); err != nil {
+	if err := insertProfileGravity(ctx, tx, profileID, profile.GravitySettings); err != nil {
 		return 0, err
 	}
 
-	if err := insertProfileSections(ctx, tx, profileID, sync.ConfigSettings); err != nil {
+	if err := insertProfileSections(ctx, tx, profileID, profile.ConfigSettings); err != nil {
 		return 0, err
 	}
 
@@ -254,12 +260,17 @@ func (s *Store) insertWebhooks(ctx context.Context, tx *sql.Tx, webhooks *config
 }
 
 func (s *Store) LoadSnapshot(ctx context.Context) (*Snapshot, error) {
-	primary, replicas, err := s.loadPiHoles(ctx)
+	profiles, defaultID, err := s.loadProfiles(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	sync, err := s.loadSync(ctx)
+	primary, replicas, err := s.loadPiHoles(ctx, profiles, defaultID)
+	if err != nil {
+		return nil, err
+	}
+
+	sync, err := s.loadSync(ctx, profiles[defaultID])
 	if err != nil {
 		return nil, err
 	}
@@ -267,12 +278,16 @@ func (s *Store) LoadSnapshot(ctx context.Context) (*Snapshot, error) {
 	return &Snapshot{Primary: primary, Replicas: replicas, Sync: sync}, nil
 }
 
-func (s *Store) loadPiHoles(ctx context.Context) (model.PiHole, []model.PiHole, error) {
+func (s *Store) loadPiHoles(
+	ctx context.Context,
+	profiles map[int64]*config.Profile,
+	defaultID int64,
+) (model.PiHole, []Replica, error) {
 	var primary model.PiHole
 
-	replicas := []model.PiHole{}
+	replicas := []Replica{}
 
-	query := `SELECT role, url, password_enc FROM pihole WHERE enabled = 1 ORDER BY role DESC, position, id`
+	query := `SELECT role, url, password_enc, profile_id FROM pihole WHERE enabled = 1 ORDER BY role DESC, position, id`
 
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
@@ -282,8 +297,12 @@ func (s *Store) loadPiHoles(ctx context.Context) (model.PiHole, []model.PiHole, 
 	defer rows.Close()
 
 	for rows.Next() {
-		var role, rawURL, password string
-		if err := rows.Scan(&role, &rawURL, &password); err != nil {
+		var (
+			role, rawURL, password string
+			profileID              sql.NullInt64
+		)
+
+		if err := rows.Scan(&role, &rawURL, &password, &profileID); err != nil {
 			return primary, nil, fmt.Errorf("read pihole: %w", err)
 		}
 
@@ -297,7 +316,10 @@ func (s *Store) loadPiHoles(ctx context.Context) (model.PiHole, []model.PiHole, 
 			continue
 		}
 
-		replicas = append(replicas, model.NewPiHole(rawURL, plain))
+		replicas = append(replicas, Replica{
+			PiHole:  model.NewPiHole(rawURL, plain),
+			Profile: resolveProfile(profiles, profileID, defaultID),
+		})
 	}
 
 	if err := rows.Err(); err != nil {
@@ -307,18 +329,23 @@ func (s *Store) loadPiHoles(ctx context.Context) (model.PiHole, []model.PiHole, 
 	return primary, replicas, nil
 }
 
-func (s *Store) loadSync(ctx context.Context) (*config.Sync, error) {
-	profileID, sync, err := s.loadProfile(ctx)
-	if err != nil {
-		return nil, err
+func resolveProfile(profiles map[int64]*config.Profile, profileID sql.NullInt64, defaultID int64) *config.Profile {
+	if profileID.Valid {
+		if profile, found := profiles[profileID.Int64]; found {
+			return profile
+		}
 	}
 
-	settings, err := s.loadProfileSections(ctx, profileID)
-	if err != nil {
-		return nil, err
-	}
+	return profiles[defaultID]
+}
 
-	sync.ConfigSettings = settings
+func (s *Store) loadSync(ctx context.Context, profile *config.Profile) (*config.Sync, error) {
+	sync := config.Sync{
+		FullSync:        profile.FullSync,
+		RunGravity:      profile.RunGravity,
+		GravitySettings: profile.GravitySettings,
+		ConfigSettings:  profile.ConfigSettings,
+	}
 
 	cron, err := loadSchedule(ctx, s.db)
 	if err != nil {
@@ -334,99 +361,159 @@ func (s *Store) loadSync(ctx context.Context) (*config.Sync, error) {
 
 	sync.WebhookSettings = webhooks
 
-	return sync, nil
+	return &sync, nil
 }
 
-func (s *Store) loadProfile(ctx context.Context) (int64, *config.Sync, error) {
-	var (
-		profileID int64
-		sync      config.Sync
-		gravity   config.GravitySettings
-	)
-
-	query := `SELECT p.id, p.full_sync, p.run_gravity, g.dhcp_leases, g."group", g.adlist, g.adlist_by_group,
+func (s *Store) loadProfiles(ctx context.Context) (map[int64]*config.Profile, int64, error) {
+	query := `SELECT p.id, p.name, p.full_sync, p.run_gravity, g.dhcp_leases, g."group", g.adlist, g.adlist_by_group,
 		g.domainlist, g.domainlist_by_group, g.client, g.client_by_group
-		FROM profile p JOIN profile_gravity g ON g.profile_id = p.id ORDER BY p.id LIMIT 1`
+		FROM profile p JOIN profile_gravity g ON g.profile_id = p.id ORDER BY p.id`
 
-	err := s.db.QueryRowContext(ctx, query).Scan(&profileID, &sync.FullSync, &sync.RunGravity,
-		&gravity.DHCPLeases, &gravity.Group, &gravity.Adlist, &gravity.AdlistByGroup,
-		&gravity.Domainlist, &gravity.DomainlistByGroup, &gravity.Client, &gravity.ClientByGroup)
+	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
-		return 0, nil, fmt.Errorf("read profile: %w", err)
+		return nil, 0, fmt.Errorf("read profiles: %w", err)
 	}
 
-	sync.GravitySettings = &gravity
+	defer rows.Close()
 
-	return profileID, &sync, nil
+	profiles := map[int64]*config.Profile{}
+
+	var defaultID int64
+
+	for rows.Next() {
+		var (
+			id      int64
+			profile config.Profile
+			gravity config.GravitySettings
+		)
+
+		if err := rows.Scan(&id, &profile.Name, &profile.FullSync, &profile.RunGravity,
+			&gravity.DHCPLeases, &gravity.Group, &gravity.Adlist, &gravity.AdlistByGroup,
+			&gravity.Domainlist, &gravity.DomainlistByGroup, &gravity.Client, &gravity.ClientByGroup); err != nil {
+			return nil, 0, fmt.Errorf("read profile: %w", err)
+		}
+
+		profile.GravitySettings = &gravity
+		profiles[id] = &profile
+
+		if defaultID == 0 || profile.Name == config.DefaultProfileName {
+			defaultID = id
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("read profiles: %w", err)
+	}
+
+	if len(profiles) == 0 {
+		return nil, 0, errNoProfile
+	}
+
+	if err := s.attachSections(ctx, profiles); err != nil {
+		return nil, 0, err
+	}
+
+	return profiles, defaultID, nil
 }
 
-func (s *Store) loadProfileSections(ctx context.Context, profileID int64) (*config.ConfigSettings, error) {
-	keys, err := s.loadProfileKeys(ctx, profileID)
+func (s *Store) attachSections(ctx context.Context, profiles map[int64]*config.Profile) error {
+	keys, err := s.loadProfileKeys(ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	query := `SELECT section, enabled, filter_type FROM profile_section WHERE profile_id = ?`
+	stored, err := s.loadProfileSections(ctx, keys)
+	if err != nil {
+		return err
+	}
 
-	rows, err := s.db.QueryContext(ctx, query, profileID)
+	for id, profile := range profiles {
+		settings := config.ConfigSettings{}
+
+		for _, section := range sectionFields(&settings) {
+			if setting, found := stored[id][section.name]; found {
+				*section.value = setting
+				continue
+			}
+
+			*section.value = config.NewConfigSetting(false, nil, nil)
+		}
+
+		profile.ConfigSettings = &settings
+	}
+
+	return nil
+}
+
+func (s *Store) loadProfileSections(
+	ctx context.Context,
+	keys map[int64]map[string][]string,
+) (map[int64]map[string]*config.ConfigSetting, error) {
+	query := `SELECT profile_id, section, enabled, filter_type FROM profile_section`
+
+	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("read profile sections: %w", err)
 	}
 
 	defer rows.Close()
 
-	stored := map[string]*config.ConfigSetting{}
+	stored := map[int64]map[string]*config.ConfigSetting{}
 
 	for rows.Next() {
 		var (
+			profileID  int64
 			section    string
 			enabled    bool
 			filterType string
 		)
 
-		if err := rows.Scan(&section, &enabled, &filterType); err != nil {
+		if err := rows.Scan(&profileID, &section, &enabled, &filterType); err != nil {
 			return nil, fmt.Errorf("read profile section: %w", err)
 		}
 
-		stored[section] = newConfigSetting(enabled, filterType, keys[section])
+		if stored[profileID] == nil {
+			stored[profileID] = map[string]*config.ConfigSetting{}
+		}
+
+		stored[profileID][section] = newConfigSetting(enabled, filterType, keys[profileID][section])
 	}
 
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("read profile sections: %w", err)
 	}
 
-	settings := config.ConfigSettings{}
-	for _, section := range sectionFields(&settings) {
-		if setting, found := stored[section.name]; found {
-			*section.value = setting
-			continue
-		}
-
-		*section.value = config.NewConfigSetting(false, nil, nil)
-	}
-
-	return &settings, nil
+	return stored, nil
 }
 
-func (s *Store) loadProfileKeys(ctx context.Context, profileID int64) (map[string][]string, error) {
-	query := `SELECT section, key FROM profile_key WHERE profile_id = ? ORDER BY section, position`
+func (s *Store) loadProfileKeys(ctx context.Context) (map[int64]map[string][]string, error) {
+	query := `SELECT profile_id, section, key FROM profile_key ORDER BY profile_id, section, position`
 
-	rows, err := s.db.QueryContext(ctx, query, profileID)
+	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("read profile keys: %w", err)
 	}
 
 	defer rows.Close()
 
-	keys := map[string][]string{}
+	keys := map[int64]map[string][]string{}
 
 	for rows.Next() {
-		var section, key string
-		if err := rows.Scan(&section, &key); err != nil {
+		var (
+			profileID int64
+			section   string
+			key       string
+		)
+
+		if err := rows.Scan(&profileID, &section, &key); err != nil {
 			return nil, fmt.Errorf("read profile key: %w", err)
 		}
 
-		keys[section] = append(keys[section], key)
+		if keys[profileID] == nil {
+			keys[profileID] = map[string][]string{}
+		}
+
+		keys[profileID][section] = append(keys[profileID][section], key)
 	}
 
 	if err := rows.Err(); err != nil {

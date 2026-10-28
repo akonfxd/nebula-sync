@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/robfig/cron/v3"
@@ -11,6 +12,7 @@ import (
 	"github.com/lovelaze/nebula-sync/internal/api"
 	"github.com/lovelaze/nebula-sync/internal/config"
 	"github.com/lovelaze/nebula-sync/internal/pihole"
+	"github.com/lovelaze/nebula-sync/internal/pihole/model"
 	"github.com/lovelaze/nebula-sync/internal/store"
 	"github.com/lovelaze/nebula-sync/internal/sync"
 	"github.com/lovelaze/nebula-sync/internal/sync/retry"
@@ -22,6 +24,7 @@ const shutdownTimeout = 30 * time.Second
 
 type Service struct {
 	target    sync.Target
+	plan      sync.Plan
 	conf      config.Config
 	callbacks []sync.Callback
 	State     *sync.State
@@ -29,9 +32,10 @@ type Service struct {
 	store     *store.Store
 }
 
-func NewService(target sync.Target, conf config.Config, callbacks ...sync.Callback) *Service {
+func NewService(target sync.Target, plan sync.Plan, conf config.Config, callbacks ...sync.Callback) *Service {
 	return &Service{
 		target:    target,
+		plan:      plan,
 		conf:      conf,
 		callbacks: callbacks,
 		State:     sync.NewState(),
@@ -49,7 +53,8 @@ func Init(ctx context.Context) (*Service, error) {
 		return nil, err
 	}
 
-	if err := loadStoredConfig(ctx, configStore, &conf); err != nil {
+	snapshot, err := loadStoredConfig(ctx, configStore, &conf)
+	if err != nil {
 		_ = configStore.Close()
 		return nil, err
 	}
@@ -58,15 +63,12 @@ func Init(ctx context.Context) (*Service, error) {
 	retry.Init(conf.Client)
 
 	primary := pihole.NewClient(conf.Primary, httpClient)
-	var replicas []pihole.Client
-	for _, replica := range conf.Replicas {
-		replicas = append(replicas, pihole.NewClient(replica, httpClient))
-	}
+	plan := newPlan(snapshot.Replicas, httpClient)
 
 	webhookClient := webhook.NewClient(conf.Sync.WebhookSettings)
 
-	target := sync.NewTarget(primary, replicas)
-	service := NewService(target, conf, webhookClient)
+	target := sync.NewTarget(primary)
+	service := NewService(target, plan, conf, webhookClient)
 
 	if conf.API.Enabled {
 		service.server = api.NewServer(service.State, conf.API.Addr)
@@ -77,10 +79,29 @@ func Init(ctx context.Context) (*Service, error) {
 	return service, nil
 }
 
-func loadStoredConfig(ctx context.Context, configStore *store.Store, conf *config.Config) error {
+func newPlan(replicas []store.Replica, httpClient *http.Client) sync.Plan {
+	plan := sync.Plan{Replicas: make([]sync.ReplicaPlan, 0, len(replicas))}
+
+	for _, replica := range replicas {
+		settings := sync.NewSettings(replica.Profile)
+		client := pihole.NewClient(replica.PiHole, httpClient)
+
+		log.Debug().
+			Str("target", client.String()).
+			Str("profile", settings.Profile).
+			Str("mode", settings.Mode).
+			Msg("Replica configuration")
+
+		plan.Replicas = append(plan.Replicas, sync.ReplicaPlan{Client: client, Settings: settings})
+	}
+
+	return plan
+}
+
+func loadStoredConfig(ctx context.Context, configStore *store.Store, conf *config.Config) (*store.Snapshot, error) {
 	seeded, err := configStore.Seeded(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if seeded {
@@ -92,11 +113,11 @@ func loadStoredConfig(ctx context.Context, configStore *store.Store, conf *confi
 	} else {
 		envConf := config.Config{}
 		if err := envConf.Load(); err != nil {
-			return fmt.Errorf("no stored configuration and environment is incomplete: %w", err)
+			return nil, fmt.Errorf("no stored configuration and environment is incomplete: %w", err)
 		}
 
 		if err := configStore.SeedFromEnv(ctx, &envConf); err != nil {
-			return err
+			return nil, err
 		}
 
 		log.Info().Msg("Seeded configuration from environment")
@@ -104,14 +125,18 @@ func loadStoredConfig(ctx context.Context, configStore *store.Store, conf *confi
 
 	snapshot, err := configStore.LoadSnapshot(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	conf.Primary = snapshot.Primary
-	conf.Replicas = snapshot.Replicas
 	conf.Sync = snapshot.Sync
 
-	return nil
+	conf.Replicas = make([]model.PiHole, 0, len(snapshot.Replicas))
+	for _, replica := range snapshot.Replicas {
+		conf.Replicas = append(conf.Replicas, replica.PiHole)
+	}
+
+	return snapshot, nil
 }
 
 func (service *Service) Close() error {
@@ -126,13 +151,13 @@ func (service *Service) Run(ctx context.Context) error {
 		service.server.Start(ctx)
 	}
 
-	if err := service.sync(ctx, service.target); err != nil {
+	if err := service.sync(ctx); err != nil {
 		return err
 	}
 
 	if service.conf.Sync.Cron != nil {
 		return service.startCron(ctx, func() {
-			if err := service.sync(ctx, service.target); err != nil {
+			if err := service.sync(ctx); err != nil {
 				log.Error().Err(err).Msg("Sync failed")
 			}
 		})
@@ -141,15 +166,8 @@ func (service *Service) Run(ctx context.Context) error {
 	return nil
 }
 
-func (service *Service) sync(ctx context.Context, t sync.Target) error {
-	var report *sync.Report
-	var err error
-
-	if service.conf.Sync.FullSync {
-		report, err = t.FullSync(ctx, service.conf.Sync)
-	} else {
-		report, err = t.SelectiveSync(ctx, service.conf.Sync)
-	}
+func (service *Service) sync(ctx context.Context) error {
+	report, err := service.target.Sync(ctx, service.plan)
 
 	service.State.Record(report, err)
 	service.runCallbacks(err)

@@ -17,27 +17,23 @@ import (
 const cleanupTimeout = 30 * time.Second
 
 type Target interface {
-	FullSync(ctx context.Context, sync *config.Sync) (*Report, error)
-	SelectiveSync(ctx context.Context, sync *config.Sync) (*Report, error)
+	Sync(ctx context.Context, plan Plan) (*Report, error)
 }
 
 type target struct {
-	Primary  pihole.Client
-	Replicas []pihole.Client
-	Client   *config.Client
+	Primary pihole.Client
 }
 
-func NewTarget(primary pihole.Client, replicas []pihole.Client) Target {
+func NewTarget(primary pihole.Client) Target {
 	return &target{
-		Primary:  primary,
-		Replicas: replicas,
+		Primary: primary,
 	}
 }
 
-func (target *target) sync(ctx context.Context, syncFunc func(*run) error, mode string) (*Report, error) {
+func (target *target) Sync(ctx context.Context, plan Plan) (*Report, error) {
 	var err error
-	currentRun := newRun(mode, target.Replicas)
-	log.Info().Str("mode", mode).Int("replicas", len(target.Replicas)).Msg("Running sync")
+	currentRun := newRun(plan)
+	log.Info().Str("mode", currentRun.mode).Int("replicas", len(plan.Replicas)).Msg("Running sync")
 
 	defer func() {
 		if err != nil {
@@ -47,7 +43,7 @@ func (target *target) sync(ctx context.Context, syncFunc func(*run) error, mode 
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupTimeout)
 		defer cancel()
 
-		target.deleteSessions(cleanupCtx)
+		target.deleteSessions(cleanupCtx, currentRun)
 	}()
 
 	if authErr := target.authenticate(ctx, currentRun); authErr != nil {
@@ -55,7 +51,7 @@ func (target *target) sync(ctx context.Context, syncFunc func(*run) error, mode 
 		return currentRun.report(), err
 	}
 
-	err = syncFunc(currentRun)
+	err = target.syncSteps(ctx, currentRun)
 	report := currentRun.report()
 
 	if failed := report.Failed(); failed > 0 {
@@ -69,13 +65,31 @@ func (target *target) sync(ctx context.Context, syncFunc func(*run) error, mode 
 	return report, err
 }
 
+func (target *target) syncSteps(ctx context.Context, currentRun *run) error {
+	if err := target.syncTeleporters(ctx, currentRun); err != nil {
+		return fmt.Errorf("sync teleporters: %w", err)
+	}
+
+	if err := target.syncConfigs(ctx, currentRun); err != nil {
+		return fmt.Errorf("sync configs: %w", err)
+	}
+
+	if currentRun.runGravity() {
+		if err := target.runGravity(ctx, currentRun); err != nil {
+			return fmt.Errorf("run gravity: %w", err)
+		}
+	}
+
+	return nil
+}
+
 func (target *target) authenticate(ctx context.Context, currentRun *run) error {
 	log.Info().Msg("Authenticating clients...")
 	if err := target.Primary.PostAuth(ctx); err != nil {
 		return fmt.Errorf("primary: %w", err)
 	}
 
-	currentRun.forEachReplica("authenticate", func(replica pihole.Client) error {
+	currentRun.forEachReplica("authenticate", func(replica pihole.Client, _ *Settings) error {
 		return retry.Fixed(ctx, func() error {
 			return replica.PostAuth(ctx)
 		}, retry.AttemptsPostAuth)
@@ -84,34 +98,34 @@ func (target *target) authenticate(ctx context.Context, currentRun *run) error {
 	return nil
 }
 
-func (target *target) deleteSessions(ctx context.Context) {
+func (target *target) deleteSessions(ctx context.Context, currentRun *run) {
 	log.Info().Msg("Invalidating sessions...")
 	if err := target.Primary.DeleteSession(ctx); err != nil {
 		log.Warn().Msgf("Failed to invalidate session for target: %s", target.Primary.String())
 	}
 
-	for _, replica := range target.Replicas {
+	for _, replica := range currentRun.replicas {
 		if err := retry.Fixed(ctx, func() error {
-			return replica.DeleteSession(ctx)
+			return replica.client.DeleteSession(ctx)
 		}, retry.AttemptsDeleteSession); err != nil {
-			log.Warn().Msgf("Failed to invalidate session for target: %s", replica.String())
+			log.Warn().Msgf("Failed to invalidate session for target: %s", replica.client.String())
 		}
 	}
 }
 
-func (target *target) syncTeleporters(ctx context.Context, currentRun *run, gravitySettings *config.GravitySettings) error {
+func (target *target) syncTeleporters(ctx context.Context, currentRun *run) error {
 	log.Info().Msg("Syncing teleporters...")
 	conf, err := target.Primary.GetTeleporter(ctx)
 	if err != nil {
 		return fmt.Errorf("primary: %w", err)
 	}
 
-	var teleporterRequest *model.PostTeleporterRequest
-	if gravitySettings != nil {
-		teleporterRequest = createPostTeleporterRequest(gravitySettings)
-	}
+	currentRun.forEachReplica("teleporter", func(replica pihole.Client, settings *Settings) error {
+		var teleporterRequest *model.PostTeleporterRequest
+		if settings.Gravity != nil {
+			teleporterRequest = createPostTeleporterRequest(settings.Gravity)
+		}
 
-	currentRun.forEachReplica("teleporter", func(replica pihole.Client) error {
 		return retry.Fixed(ctx, func() error {
 			return replica.PostTeleporter(ctx, conf, teleporterRequest)
 		}, retry.AttemptsPostTeleporter)
@@ -120,16 +134,16 @@ func (target *target) syncTeleporters(ctx context.Context, currentRun *run, grav
 	return nil
 }
 
-func (target *target) syncConfigs(ctx context.Context, currentRun *run, configSettings *config.ConfigSettings) error {
+func (target *target) syncConfigs(ctx context.Context, currentRun *run) error {
 	log.Info().Msg("Syncing configs...")
 	configResponse, err := target.Primary.GetConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("primary: %w", err)
 	}
 
-	configRequest := createPatchConfigRequest(configSettings, configResponse)
+	currentRun.forEachReplica("config", func(replica pihole.Client, settings *Settings) error {
+		configRequest := createPatchConfigRequest(settings.Config, configResponse)
 
-	currentRun.forEachReplica("config", func(replica pihole.Client) error {
 		return retry.Fixed(ctx, func() error {
 			return replica.PatchConfig(ctx, configRequest)
 		}, retry.AttemptsPatchConfig)
@@ -145,7 +159,11 @@ func (target *target) runGravity(ctx context.Context, currentRun *run) error {
 		return fmt.Errorf("primary: %w", err)
 	}
 
-	currentRun.forEachReplica("gravity", func(replica pihole.Client) error {
+	currentRun.forEachReplica("gravity", func(replica pihole.Client, settings *Settings) error {
+		if !settings.RunGravity {
+			return nil
+		}
+
 		return retry.Fixed(ctx, func() error {
 			return replica.PostRunGravity(ctx)
 		}, retry.AttemptsPostRunGravity)
@@ -183,7 +201,7 @@ func createPatchConfigRequest(config *config.ConfigSettings, configResponse *mod
 }
 
 func filterPatchConfigRequest(setting *config.ConfigSetting, json map[string]any) map[string]any {
-	if !setting.Enabled {
+	if setting == nil || !setting.Enabled {
 		return nil
 	}
 

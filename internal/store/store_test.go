@@ -115,10 +115,10 @@ func TestStore_SeedAndLoadRoundTrip(t *testing.T) {
 	assert.Equal(t, "primary-secret", snapshot.Primary.Password)
 
 	require.Len(t, snapshot.Replicas, 2)
-	assert.Equal(t, "http://replica-one.test", snapshot.Replicas[0].URL.String())
-	assert.Equal(t, "replica-one-secret", snapshot.Replicas[0].Password)
-	assert.Equal(t, "http://replica-two.test", snapshot.Replicas[1].URL.String())
-	assert.Equal(t, "replica-two-secret", snapshot.Replicas[1].Password)
+	assert.Equal(t, "http://replica-one.test", snapshot.Replicas[0].PiHole.URL.String())
+	assert.Equal(t, "replica-one-secret", snapshot.Replicas[0].PiHole.Password)
+	assert.Equal(t, "http://replica-two.test", snapshot.Replicas[1].PiHole.URL.String())
+	assert.Equal(t, "replica-two-secret", snapshot.Replicas[1].PiHole.Password)
 
 	require.NotNil(t, snapshot.Sync.Cron)
 	assert.Equal(t, "0 * * * *", *snapshot.Sync.Cron)
@@ -276,4 +276,120 @@ func scanStrings(ctx context.Context, t *testing.T, store *Store, query string) 
 	require.NoError(t, rows.Err())
 
 	return values
+}
+
+const sectionDNS = "dns"
+
+func addProfile(t *testing.T, store *Store, name string, sections map[string]string) int64 {
+	t.Helper()
+
+	ctx := t.Context()
+
+	result, err := store.db.ExecContext(ctx,
+		`INSERT INTO profile (name, full_sync, run_gravity, created_at, updated_at) VALUES (?, 0, 0, '', '')`, name)
+	require.NoError(t, err)
+
+	id, err := result.LastInsertId()
+	require.NoError(t, err)
+
+	_, err = store.db.ExecContext(ctx, `INSERT INTO profile_gravity (profile_id, adlist) VALUES (?, 1)`, id)
+	require.NoError(t, err)
+
+	for section, key := range sections {
+		filterType := filterNone
+		if key != "" {
+			filterType = filterInclude
+		}
+
+		_, err = store.db.ExecContext(ctx,
+			`INSERT INTO profile_section (profile_id, section, enabled, filter_type) VALUES (?, ?, 1, ?)`,
+			id, section, filterType)
+		require.NoError(t, err)
+
+		if key == "" {
+			continue
+		}
+
+		_, err = store.db.ExecContext(ctx,
+			`INSERT INTO profile_key (profile_id, section, key, position) VALUES (?, ?, ?, 0)`, id, section, key)
+		require.NoError(t, err)
+	}
+
+	return id
+}
+
+func TestStore_LoadSnapshot_perReplicaProfiles(t *testing.T) {
+	store := openTestStore(t, testDBPath(t), testKeyHex)
+	require.NoError(t, store.SeedFromEnv(t.Context(), seedConfig()))
+
+	id := addProfile(t, store, "dns-only", map[string]string{sectionDNS: "upstreams"})
+
+	_, err := store.db.ExecContext(t.Context(),
+		`UPDATE pihole SET profile_id = ? WHERE url = 'http://replica-two.test'`, id)
+	require.NoError(t, err)
+
+	snapshot, err := store.LoadSnapshot(t.Context())
+	require.NoError(t, err)
+
+	require.Len(t, snapshot.Replicas, 2)
+
+	first := snapshot.Replicas[0]
+	assert.Equal(t, "http://replica-one.test", first.PiHole.URL.String())
+	assert.Equal(t, config.DefaultProfileName, first.Profile.Name)
+	assert.True(t, first.Profile.GravitySettings.DHCPLeases)
+	assert.True(t, first.Profile.ConfigSettings.Misc.Enabled)
+
+	second := snapshot.Replicas[1]
+	assert.Equal(t, "http://replica-two.test", second.PiHole.URL.String())
+	assert.Equal(t, "dns-only", second.Profile.Name)
+	assert.False(t, second.Profile.GravitySettings.DHCPLeases)
+	assert.True(t, second.Profile.GravitySettings.Adlist)
+	assert.False(t, second.Profile.ConfigSettings.Misc.Enabled)
+	assert.True(t, second.Profile.ConfigSettings.DNS.Enabled)
+	require.NotNil(t, second.Profile.ConfigSettings.DNS.Filter)
+	assert.Equal(t, filter.Include, second.Profile.ConfigSettings.DNS.Filter.Type)
+	assert.Equal(t, []string{"upstreams"}, second.Profile.ConfigSettings.DNS.Filter.Keys)
+
+	assert.True(t, snapshot.Sync.RunGravity)
+	assert.Equal(t, []string{"upstreams", "blockESNI"}, snapshot.Sync.ConfigSettings.DNS.Filter.Keys)
+}
+
+func TestStore_LoadSnapshot_unknownProfileFallsBackToDefault(t *testing.T) {
+	store := openTestStore(t, testDBPath(t), testKeyHex)
+	require.NoError(t, store.SeedFromEnv(t.Context(), seedConfig()))
+
+	_, err := store.db.ExecContext(t.Context(), `UPDATE pihole SET profile_id = NULL WHERE role = 'replica'`)
+	require.NoError(t, err)
+
+	snapshot, err := store.LoadSnapshot(t.Context())
+	require.NoError(t, err)
+
+	require.Len(t, snapshot.Replicas, 2)
+	for _, replica := range snapshot.Replicas {
+		assert.Equal(t, config.DefaultProfileName, replica.Profile.Name)
+	}
+}
+
+func TestStore_LoadSnapshot_defaultProfileIsNotPositional(t *testing.T) {
+	store := openTestStore(t, testDBPath(t), testKeyHex)
+
+	addProfile(t, store, "edge", map[string]string{sectionDNS: ""})
+	require.NoError(t, store.SeedFromEnv(t.Context(), seedConfig()))
+
+	_, err := store.db.ExecContext(t.Context(), `UPDATE pihole SET profile_id = NULL WHERE role = 'replica'`)
+	require.NoError(t, err)
+
+	snapshot, err := store.LoadSnapshot(t.Context())
+	require.NoError(t, err)
+
+	require.Len(t, snapshot.Replicas, 2)
+	assert.Equal(t, config.DefaultProfileName, snapshot.Replicas[0].Profile.Name)
+	assert.True(t, snapshot.Sync.RunGravity)
+}
+
+func TestStore_LoadSnapshot_withoutAnyProfile(t *testing.T) {
+	store := openTestStore(t, testDBPath(t), testKeyHex)
+
+	_, err := store.LoadSnapshot(t.Context())
+	require.ErrorIs(t, err, errNoProfile)
 }
