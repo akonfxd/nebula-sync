@@ -1,0 +1,17 @@
+.git
+.github
+.idea
+e2e
+testdata
+
+# Installed and built inside the node stage, never copied from the host: the
+# native esbuild and rollup binaries there are built for the build platform.
+web/node_modules
+internal/api/ui/dist
+
+*.md
+LICENSE
+nebula-sync
+*.test
+*.out
+.env

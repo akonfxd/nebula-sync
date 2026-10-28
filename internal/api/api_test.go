@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/lovelaze/nebula-sync/internal/api/ui"
 	"github.com/lovelaze/nebula-sync/internal/config"
 	"github.com/lovelaze/nebula-sync/internal/pihole/model"
 	"github.com/lovelaze/nebula-sync/internal/store"
@@ -507,4 +508,49 @@ func TestAPI_reportsAFailedReload(t *testing.T) {
 	resp := api.do(t, http.MethodPut, "/api/v1/schedule", map[string]any{"cron": "0 * * * *"})
 	require.Equal(t, http.StatusInternalServerError, resp.Code)
 	assert.Contains(t, resp.Body.String(), "could not be applied")
+}
+
+// The console is a catch-all route, so an api path that does not exist must be
+// caught before it: a fetch expecting json should never be handed a web page.
+func TestAPI_unknownApiPathStaysJSON(t *testing.T) {
+	api := newTestAPI(t)
+	api.bootstrap(t)
+
+	missing := api.do(t, http.MethodGet, "/api/v1/nope", nil)
+	assert.Equal(t, http.StatusNotFound, missing.Code)
+	assert.Contains(t, missing.Header().Get("Content-Type"), "application/json")
+	assert.NotEmpty(t, decodeBody[errorResponse](t, missing).Error)
+
+	wrongMethod := api.do(t, http.MethodDelete, "/api/v1/status", nil)
+	assert.Equal(t, http.StatusMethodNotAllowed, wrongMethod.Code)
+	assert.Contains(t, wrongMethod.Header().Get("Content-Type"), "application/json")
+}
+
+// Every path the api does not claim belongs to the console, including the
+// client side routes a browser asks for after a reload.
+func TestAPI_consoleOwnsEverythingElse(t *testing.T) {
+	api := newTestAPI(t)
+
+	for _, path := range []string{"/", "/instances", "/profiles"} {
+		resp := api.do(t, http.MethodGet, path, nil)
+
+		assert.NotContains(t, resp.Header().Get("Content-Type"), "application/json", path)
+		assert.NotEmpty(t, resp.Header().Get("Content-Security-Policy"), path)
+
+		if ui.Built() {
+			assert.Equal(t, http.StatusOK, resp.Code, path)
+			assert.Contains(t, resp.Body.String(), "<!doctype html>", path)
+		}
+	}
+}
+
+// /health predates the console and stays unauthenticated, so the catch-all
+// must not have swallowed it.
+func TestAPI_healthIsStillReachable(t *testing.T) {
+	api := newTestAPI(t)
+
+	assert.Equal(t, http.StatusInternalServerError, api.do(t, http.MethodGet, "/health", nil).Code)
+
+	api.server.state.Record(nil, nil)
+	assert.Equal(t, http.StatusOK, api.do(t, http.MethodGet, "/health", nil).Code)
 }

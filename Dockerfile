@@ -1,3 +1,14 @@
+# The console is built first and copied in, so the go build can embed it.
+FROM node:22-alpine AS node
+
+WORKDIR /app
+
+COPY web/package.json web/package-lock.json ./web/
+RUN npm --prefix web ci
+
+COPY web ./web
+RUN npm --prefix web run build
+
 FROM golang:1.26-alpine AS golang
 
 WORKDIR /app
@@ -6,6 +17,7 @@ RUN apk add -U tzdata && \
     apk --update add ca-certificates
 
 COPY . .
+COPY --from=node /app/internal/api/ui/dist ./internal/api/ui/dist
 
 RUN go mod download
 RUN go mod verify

@@ -19,3 +19,7 @@ nebula-sync
 # Go workspace file
 go.work
 go.work.sum
+
+# console build output, rebuilt with `make web`
+/internal/api/ui/dist/*
+!/internal/api/ui/dist/.gitkeep

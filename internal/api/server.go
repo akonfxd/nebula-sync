@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 
+	"github.com/lovelaze/nebula-sync/internal/api/ui"
 	"github.com/lovelaze/nebula-sync/internal/config"
 	"github.com/lovelaze/nebula-sync/internal/store"
 	"github.com/lovelaze/nebula-sync/internal/sync"
@@ -80,6 +81,11 @@ func (s *Server) routes() {
 	s.router.Route("/api/v1", func(r chi.Router) {
 		r.Use(noStore, s.sameOrigin)
 
+		// Without this an unknown /api path would fall through to the console
+		// and answer a fetch with a page of html.
+		r.NotFound(apiNotFound)
+		r.MethodNotAllowed(apiMethodNotAllowed)
+
 		r.Get("/info", s.infoHandler)
 		r.Post("/auth/bootstrap", s.bootstrapHandler)
 		r.Post("/auth/login", s.loginHandler)
@@ -119,6 +125,16 @@ func (s *Server) routes() {
 			})
 		})
 	})
+
+	s.router.NotFound(ui.Handler().ServeHTTP)
+}
+
+func apiNotFound(w http.ResponseWriter, _ *http.Request) {
+	writeError(w, http.StatusNotFound, "no such endpoint")
+}
+
+func apiMethodNotAllowed(w http.ResponseWriter, _ *http.Request) {
+	writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 }
 
 func (s *Server) Start(ctx context.Context) {
@@ -126,6 +142,12 @@ func (s *Server) Start(ctx context.Context) {
 		Handler:           s.router,
 		Addr:              s.addr,
 		ReadHeaderTimeout: readHeaderTimeout,
+	}
+
+	if ui.Built() {
+		log.Info().Str("addr", s.addr).Msg("Serving the console")
+	} else {
+		log.Warn().Msg("No console was built into this binary, serving the api only")
 	}
 
 	go func() {
