@@ -1,5 +1,15 @@
 version: 2
 
+# Releases go to Gitea, not GitHub. Without this goreleaser reads the ssh
+# remote, cannot tell what is behind it, and defaults to api.github.com.
+gitea_urls:
+  api: https://gitea.buhnet.org/api/v1
+  download: https://gitea.buhnet.org
+
+# Gitea Actions injects GITHUB_TOKEN as well as GITEA_TOKEN, and goreleaser
+# refuses to guess which one a run meant.
+force_token: gitea
+
 # Every binary embeds the console, so it has to be built before the first
 # target is compiled. Hooks run once, from the project root.
 before:

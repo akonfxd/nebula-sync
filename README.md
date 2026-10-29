@@ -61,24 +61,9 @@ delete the database to start over.
 
 ## Installation
 
+> **There is no published image for this fork — you build it.**
 > `ghcr.io/lovelaze/nebula-sync` and `docker.io/lovelaze/nebula-sync` are the
-> *upstream* images and contain none of what this README describes. This fork
-> publishes to its own registry instead.
-
-Images are published to the Gitea container registry on each `v*.*.*` tag:
-
-```
-gitea.buhnet.org/akonfxd/nebula-sync:latest
-gitea.buhnet.org/akonfxd/nebula-sync:v1.2.3
-```
-
-If the package is private, log in first:
-
-```bash
-docker login gitea.buhnet.org   # username, and an access token as the password
-```
-
-Or build it yourself, which needs no login:
+> *upstream* images and contain none of what this README describes.
 
 ```bash
 docker build -t nebula-sync .
@@ -96,7 +81,7 @@ thing it really needs is a volume and a port.
 ---
 services:
   nebula-sync:
-    image: gitea.buhnet.org/akonfxd/nebula-sync:latest
+    image: nebula-sync
     container_name: nebula-sync
     ports:
       - "8080:8080"
@@ -133,7 +118,7 @@ docker run -d \
   -p 8080:8080 \
   -v nebula-sync:/data \
   -e ENCRYPTION_KEY="$(openssl rand -hex 32)" \
-  gitea.buhnet.org/akonfxd/nebula-sync:latest
+  nebula-sync
 ```
 
 That is a complete install. No `PRIMARY`, no `REPLICAS` — add them in the
